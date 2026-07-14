@@ -3,15 +3,38 @@
 ## Backend
 
   ### Models
-  - `{TABLE}.cs` — response model (with nav objects for FKs, subquery counts for n-n)
+  - `{TABLE}.cs` — response model (flat aliased fields for FK labels, subquery counts for n-n)
   - `{TABLE}Request.cs` — write DTO (FK pkids only; n-n as `List<int>`)
   - `{TABLE}Query.cs` — search DTO (Keyword?, FK pkids?, bool fields?, date ranges?)
 
   ### Repository
   - `I{TABLE}Repository.cs` + `{TABLE}Repository.cs`
-  - Dapper only (no EF). Multi-map when JOINing nav objects.
+  - Dapper only (no EF).
   - `nchar` columns: always `RTRIM()` in SQL
-  - n-n: delete-then-reinsert on update; separate query on same connection for read
+  - n-n: delete-then-reinsert **in a transaction** on update; separate query on same connection for read
+  - n-n counts on list/read: correlated subquery. Id lists: filled on GET-by-id only.
+
+  ### Foreign keys
+  - Expose FK labels as **flat aliased read-only fields** on the response model
+    (`PartnerName`, `CourseGroupDescription`, …) populated by `LEFT JOIN` — **not** Dapper multi-map
+    nav objects. `Course` is the reference implementation.
+  - Nullable FK → `LEFT JOIN`, a 無 option, and `[showClear]` on the `p-select`.
+  - Detail pages link Foreign→Primary (this entity → its FK targets). Links to entities that are
+    **not built yet are deferred** — do not scaffold dead routes.
+
+  ### Primary key variants
+  Pick the row matching the DB column; each names a built feature to copy.
+
+  | PK in schema | C# | Form (new / edit) | INSERT | Copy from |
+  |---|---|---|---|---|
+  | `nvarchar` (string) | `string` | input / **disabled** | includes PK | `AppRole`, `AppUser` |
+  | `tinyint`, user-assigned | `byte` | input / **disabled** | includes `pkid`, **no** `SCOPE_IDENTITY` | `PublishStatus` |
+  | `smallint IDENTITY` | `short` | **no input** | omits pkid; `SELECT CAST(SCOPE_IDENTITY() AS smallint)` | `Partner`, `CourseGroup` |
+  | `int IDENTITY` | `int` | **no input** | omits pkid; `SCOPE_IDENTITY` | `Course` |
+
+  - IDENTITY-assigned PKs: `{TABLE}Request.Pkid` carries the UPDATE key.
+  - On a string-PK table, any additional IDENTITY `pkid` column is **display-only**.
+  - Multi-word entities take a **kebab-case plural** route (`/api/course-groups`).
 
   ### Controller
   - Route: `/api/{tablePlural}`; `PUT` takes pkid from body (no route param)
@@ -33,7 +56,10 @@
 
   ### Form page
   - Reactive Forms; `forkJoin` for parallel lookup calls on init
-  - `p-datepicker`: convert ISO string ↔ `Date` on load/save
+  - `p-datepicker`: convert ISO string ↔ `Date` on load/save using **local** date components
+    (inline `toIso`/`parseDate` helpers — there is no `core/utils/`). Never `toISOString()`: it
+    shifts the date by the UTC offset.
+  - String PK: disabled in edit, editable in new
   - `p-datepicker [timeOnly]="true"` for `time` columns; `parseTime`/`toTimeStr` helpers
   - `p-multiselect` for n-n: `[maxSelectedLabels]="9999"`; wrap chips via `::ng-deep`
 
@@ -47,8 +73,9 @@
   |-------------|---------|
   | `nchar(n)` | `RTRIM()` in all SQL SELECTs |
   | `time(7)` | C# `TimeOnly` via `TimeOnlyTypeHandler`; display with `\| slice:0:5`; `p-datepicker [timeOnly]` in form |
-  | `date` | C# `DateOnly` via `DateOnlyTypeHandler`; `p-datepicker` in form |
-  | `smallint` PK | No special handling |
+  | `date` | C# `DateOnly` via `DateOnlyTypeHandler`; `p-datepicker` in form (local components — see Form page) |
+  | `bit` | Tri-state filter on the list (true / false / any) |
+  | PK columns | See **Primary key variants** above |
   | `nvarchar` PK (string) | Controller route `{id}` (no `:int`); service calls `encodeURIComponent(id)` | 
   
   
