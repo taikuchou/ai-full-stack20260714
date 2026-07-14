@@ -1,0 +1,58 @@
+# ---- OS / editor ----
+Thumbs.db
+ehthumbs.db
+Desktop.ini
+.DS_Store
+*.swp
+.vs/
+.vscode/*
+!.vscode/extensions.json
+.idea/
+
+# ---- Logs / temp ----
+*.log
+ng-serve.log
+ng-new.log
+ng-primeng.log
+
+# ============ .NET (src/CMS.API, src/CMS.API.Tests) ============
+bin/
+obj/
+[Dd]ebug/
+[Rr]elease/
+x64/
+x86/
+*.user
+*.suo
+TestResults/
+[Tt]est[Rr]esult*/
+project.lock.json
+artifacts/
+
+# ============ Angular (src/CMS.NG) ============
+# Dependencies
+node_modules/
+
+# Build output
+/src/CMS.NG/dist/
+/src/CMS.NG/tmp/
+/src/CMS.NG/out-tsc/
+/src/CMS.NG/bazel-out/
+
+# Angular / tooling caches
+.angular/
+.nx/
+*.tsbuildinfo
+
+# Test / coverage
+/src/CMS.NG/coverage/
+/src/CMS.NG/.karma/
+
+# npm / yarn / pnpm
+npm-debug.log*
+yarn-error.log*
+.pnpm-debug.log*
+
+# Local env overrides (keep the checked-in environment.*.ts files)
+.env
+.env.local

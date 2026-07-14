@@ -1,0 +1,13 @@
+{
+  "permissions": {
+    "allow": [
+      "PowerShell(npm *)",
+      "PowerShell(winget install *)",
+      "PowerShell($env:Path = [System.Environment]::GetEnvironmentVariable\\(\"Path\",\"Machine\"\\) + \";\" + [System.Environment]::GetEnvironmentVariable\\(\"Path\",\"User\"\\); Write-Output \"node: $\\(node --version\\)\"; Write-Output \"npm: $\\(npm --version\\)\")",
+      "PowerShell(bun *)",
+      "Bash(\"/c/Program Files/nodejs/node.exe\" --version)",
+      "Bash(powershell.exe -NoProfile -Command '[System.Environment]::GetEnvironmentVariable\\(\\\\\"Path\\\\\",\\\\\"Machine\\\\\"\\)')",
+      "PowerShell(\\([System.Environment]::GetEnvironmentVariable\\(\"Path\",\"Machine\"\\) -split ';'\\) | Where-Object { $_ -match 'nodejs' })"
+    ]
+  }
+}
