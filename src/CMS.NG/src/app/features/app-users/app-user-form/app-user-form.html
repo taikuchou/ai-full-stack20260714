@@ -1,0 +1,86 @@
+<p-toast />
+
+<div class="page-header">
+  <div class="page-title">
+    <h1>{{ isEdit() ? '編輯使用者' : '新增使用者' }}</h1>
+  </div>
+  <div class="page-actions">
+    <p-button label="取消" icon="pi pi-times" severity="secondary" [outlined]="true" (onClick)="cancel()" />
+    <p-button
+      label="儲存"
+      icon="pi pi-check"
+      (onClick)="save()"
+      [loading]="saving()"
+      severity="success" />
+  </div>
+</div>
+
+@if (loading()) {
+  <div class="loading">載入中…</div>
+} @else {
+  <form [formGroup]="form" (ngSubmit)="save()">
+    <div class="form-card">
+      <h2>使用者資料</h2>
+
+      <div class="field">
+        <label for="userId">使用者代碼 <span class="req">*</span></label>
+        <input
+          id="userId"
+          pInputText
+          type="text"
+          formControlName="userId"
+          placeholder="請輸入使用者代碼"
+          [class.ng-invalid-visual]="invalid('userId')" />
+        @if (invalid('userId')) {
+          <small class="err">使用者代碼為必填。</small>
+        }
+        @if (isEdit()) {
+          <small class="hint">使用者代碼為主鍵，不可修改。</small>
+        }
+      </div>
+
+      <div class="field">
+        <label for="userName">使用者名稱 <span class="req">*</span></label>
+        <input
+          id="userName"
+          pInputText
+          type="text"
+          formControlName="userName"
+          [class.ng-invalid-visual]="invalid('userName')" />
+        @if (invalid('userName')) {
+          <small class="err">使用者名稱為必填。</small>
+        }
+      </div>
+
+      <div class="field field-inline">
+        <label for="isActive">啟用狀態</label>
+        <p-toggleswitch inputId="isActive" formControlName="isActive" />
+      </div>
+
+      @if (!isEdit()) {
+        <p class="note">
+          <i class="pi pi-info-circle"></i>
+          新增帳號將自動套用系統預設密碼。
+        </p>
+      }
+    </div>
+
+    <div class="form-card">
+      <h2>角色</h2>
+      <div class="field">
+        <p-multiSelect
+          [options]="roles()"
+          formControlName="roleIds"
+          optionLabel="label"
+          optionValue="id"
+          placeholder="選擇角色（可複選）"
+          display="chip"
+          [filter]="true"
+          filterBy="label"
+          [maxSelectedLabels]="9999"
+          appendTo="body"
+          styleClass="w-full" />
+      </div>
+    </div>
+  </form>
+}

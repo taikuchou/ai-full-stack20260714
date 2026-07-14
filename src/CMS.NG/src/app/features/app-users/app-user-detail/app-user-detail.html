@@ -1,0 +1,63 @@
+<p-toast />
+<p-confirmDialog />
+
+<div class="page-header">
+  <div class="page-title">
+    <h1>檢視使用者</h1>
+  </div>
+  <div class="page-actions">
+    <p-button label="返回" icon="pi pi-arrow-left" severity="secondary" [outlined]="true" (onClick)="back()" />
+    <p-button
+      label="重設密碼"
+      icon="pi pi-key"
+      severity="warn"
+      [outlined]="true"
+      [disabled]="!user()"
+      (onClick)="confirmResetPassword()" />
+    <p-button label="編輯" icon="pi pi-pencil" (onClick)="edit()" />
+  </div>
+</div>
+
+@if (loading()) {
+  <div class="loading">載入中…</div>
+} @else if (user(); as u) {
+  <div class="detail-card">
+    <h2>使用者資料</h2>
+    <dl class="detail-grid">
+      <dt>主代碼</dt>
+      <dd>{{ u.pkid }}</dd>
+
+      <dt>使用者代碼</dt>
+      <dd>{{ u.userId }}</dd>
+
+      <dt>使用者名稱</dt>
+      <dd>{{ u.userName }}</dd>
+
+      <dt>啟用狀態</dt>
+      <dd>
+        <p-tag [value]="u.isActive ? '啟用' : '停用'" [severity]="u.isActive ? 'success' : 'danger'" />
+      </dd>
+
+      <dt>密碼更新時間</dt>
+      <dd>{{ u.passwordUpdatedTime ? (u.passwordUpdatedTime + 'Z' | date: 'yyyy-MM-dd HH:mm') : '—' }}</dd>
+
+      <dt>角色數</dt>
+      <dd>{{ u.roleCount }}</dd>
+    </dl>
+  </div>
+
+  <div class="detail-card">
+    <h2>角色</h2>
+    @if (roleLabels().length) {
+      <div class="chips">
+        @for (label of roleLabels(); track label) {
+          <p-chip [label]="label" />
+        }
+      </div>
+    } @else {
+      <p class="muted">尚未指派角色</p>
+    }
+  </div>
+} @else {
+  <div class="loading">查無此使用者。</div>
+}
