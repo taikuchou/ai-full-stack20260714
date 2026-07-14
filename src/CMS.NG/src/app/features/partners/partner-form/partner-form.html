@@ -1,0 +1,107 @@
+<p-toast />
+
+<div class="page-header">
+  <div class="page-title">
+    <h1>{{ isEdit() ? '編輯合作廠商' : '新增合作廠商' }}</h1>
+  </div>
+  <div class="page-actions">
+    <p-button label="取消" icon="pi pi-times" severity="secondary" [outlined]="true" (onClick)="cancel()" />
+    <p-button
+      label="儲存"
+      icon="pi pi-check"
+      (onClick)="save()"
+      [loading]="saving()"
+      severity="success" />
+  </div>
+</div>
+
+@if (loading()) {
+  <div class="loading">載入中…</div>
+} @else {
+  <form [formGroup]="form" (ngSubmit)="save()">
+    <div class="form-card">
+      <h2>廠商資料</h2>
+
+      <div class="field">
+        <label for="name">廠商名稱 <span class="req">*</span></label>
+        <input
+          id="name"
+          pInputText
+          type="text"
+          formControlName="name"
+          maxlength="50"
+          placeholder="請輸入廠商名稱"
+          [class.ng-invalid-visual]="invalid('name')" />
+        @if (invalid('name')) {
+          <small class="err">廠商名稱為必填（最多 50 字）。</small>
+        }
+      </div>
+
+      <div class="field">
+        <label for="appKey">應用代碼 <span class="req">*</span></label>
+        <input
+          id="appKey"
+          pInputText
+          type="text"
+          formControlName="appKey"
+          maxlength="10"
+          placeholder="請輸入應用代碼"
+          [class.ng-invalid-visual]="invalid('appKey')" />
+        @if (invalid('appKey')) {
+          <small class="err">應用代碼為必填（最多 10 字）。</small>
+        }
+      </div>
+
+      <div class="field">
+        <label for="nameOnPartnerMenu">選單顯示名稱 <span class="req">*</span></label>
+        <input
+          id="nameOnPartnerMenu"
+          pInputText
+          type="text"
+          formControlName="nameOnPartnerMenu"
+          maxlength="200"
+          [class.ng-invalid-visual]="invalid('nameOnPartnerMenu')" />
+        @if (invalid('nameOnPartnerMenu')) {
+          <small class="err">選單顯示名稱為必填（最多 200 字）。</small>
+        }
+      </div>
+
+      <div class="field">
+        <label for="nameOnCourseDetailPage">課程頁顯示名稱 <span class="req">*</span></label>
+        <input
+          id="nameOnCourseDetailPage"
+          pInputText
+          type="text"
+          formControlName="nameOnCourseDetailPage"
+          maxlength="50"
+          [class.ng-invalid-visual]="invalid('nameOnCourseDetailPage')" />
+        @if (invalid('nameOnCourseDetailPage')) {
+          <small class="err">課程頁顯示名稱為必填（最多 50 字）。</small>
+        }
+      </div>
+
+      <div class="field">
+        <label for="displayOrder">顯示順序 <span class="req">*</span></label>
+        <p-inputNumber
+          inputId="displayOrder"
+          formControlName="displayOrder"
+          [min]="0"
+          [useGrouping]="false" />
+        @if (invalid('displayOrder')) {
+          <small class="err">請輸入有效的顯示順序。</small>
+        }
+      </div>
+
+      <div class="field">
+        <label for="imageFilename">圖檔名稱</label>
+        <input
+          id="imageFilename"
+          pInputText
+          type="text"
+          formControlName="imageFilename"
+          maxlength="50"
+          placeholder="選填" />
+      </div>
+    </div>
+  </form>
+}
