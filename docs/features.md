@@ -1,9 +1,108 @@
 # Implemented features — detail
 
-Per-feature decisions and deviations. The index lives in [../CLAUDE.md](../CLAUDE.md); reusable
-patterns live in [../spec/code-gen.convention.md](../spec/code-gen.convention.md). Where a feature
-has a build spec under `spec/{area}/`, that spec is the fuller source — this file records what the
-spec does not, plus the pattern each feature exemplifies.
+Per-feature decisions and deviations. Reusable patterns live in
+[../spec/code-gen.convention.md](../spec/code-gen.convention.md). Where a feature has a build spec
+under `spec/{area}/`, that spec is the fuller source — this file records what the spec does not,
+plus the pattern each feature exemplifies.
+
+## Index
+
+All seven are full CRUD. Each row names the PK pattern it exemplifies — copy the closest match when
+scaffolding.
+
+| Entity | 中文 | PK pattern | Nav | Spec |
+|---|---|---|---|---|
+| AppRole | 角色 | string (`RoleId`) | 系統管理 › 角色 | *(none — mirror the code)* |
+| AppUser | 使用者 | string (`UserId`) | 系統管理 › 使用者 | [auth/AppUser.md](../spec/auth/AppUser.md) |
+| PublishStatus | 發布狀態 | `tinyint`, user-assigned | 系統管理 › 發布狀態 | [admin/PublishStatus.md](../spec/admin/PublishStatus.md) |
+| Partner | 合作廠商 | `smallint IDENTITY` | 課程管理 › 合作廠商 | [course/Partner.md](../spec/course/Partner.md) |
+| CourseGroup | 課程群組 | `smallint IDENTITY` | 課程管理 › 課程群組 | [course/CourseGroup.md](../spec/course/CourseGroup.md) |
+| Course | 課程 | `int IDENTITY` | 課程管理 › 課程 | [course/Course.md](../spec/course/Course.md) |
+| FeaturedPromoItem | 上稿作業 | `int IDENTITY` | 首頁管理 › 上稿作業 | [custom/FeaturedPromoItem/](../spec/custom/FeaturedPromoItem/FeaturedPromoItem.spec.md) |
+
+**Course** is the reference for foreign keys and N-N (beyond the AppRole↔AppUser junction) — copy it
+for anything with FKs. **FeaturedPromoItem is a customized CRUD** — do **not** copy it when
+scaffolding a conventional entity; see its section below for what it deviates on and why.
+
+Nav links from a built entity to an unbuilt one are **deferred until the target feature exists**.
+
+## Auth (登入 / 個人資料) — not a CRUD feature, no sidebar entry
+
+`POST /api/auth/login` (`AuthController` + `AuthRepository`) takes `{userId, password}` and returns
+`{userId, userName, accessToken}`. The client side is the `/login` page + `AuthService` (session
+storage), `authGuard` and `authInterceptor`; there is no sidebar entry. `PUT /api/auth/profile`
+backs the `/profile` page, reached from the topbar avatar menu (see **My Profile** below).
+
+- **Credential check:** `UserId` matched exactly, `IsActive` must be true, and `PasswordHash` must
+  equal `PasswordHasher.Hash(password)` (SHA-256, uppercase hex). Unknown user, wrong password and
+  inactive account all return the **same** generic 401 `{"message":"Invalid credentials."}` — never
+  reveal which check failed. `LoginResponse` has no `PasswordHash` property, so it cannot leak.
+- **Signing key:** read at runtime from `SysConfig['appConfig'].symmetricSecurityKey` (JSON), never
+  hard-coded — same SysConfig row `AppUserRepository` reads `defaultPassword` from. The key must be
+  **≥ 32 chars**: HmacSha256 requires a 256-bit key and the seeded value is exactly 32.
+- **Token:** 24h lifetime; claims are `NameIdentifier` (UserId), `Name` (UserName), and one `Role`
+  claim per `AppUserRole.RoleId`. The client re-reads the roles off the JWT (`jwt.util`) rather than
+  trusting a server-sent list, and stores the profile in **session** storage (cleared on tab close).
+- **Claim-URI trap.** .NET writes these as long XML-namespace URIs, and **`ClaimTypes.Role` is in a
+  different namespace from its siblings**: role is `schemas.microsoft.com/ws/2008/06/...`, while
+  NameIdentifier/Name are `schemas.xmlsoap.org/ws/2005/05/...`. `jwt.util.ts` had the xmlsoap URI
+  for role, so `decodeJwtRoles` returned `[]` for every real token and the Admin nav item never
+  appeared. It went unnoticed because the specs built their fake tokens from the same wrong
+  constant — green and self-consistent. `jwt.util.spec.ts` now also decodes a **token captured from
+  the real generator**; keep that fixture if you touch the claim types.
+- **Enforcement:** a global `AuthorizeFilter` (`Program.cs`) protects **every** endpoint; the login
+  action opts out with `[AllowAnonymous]` — without it login would demand the token it issues.
+  That attribute sits on the **Login action, not on `AuthController`**, and must stay there:
+  `AllowAnonymous` short-circuits authorization for everything it covers and an action-level
+  `[Authorize]` cannot win it back, so hoisting it to the class would silently expose
+  `PUT /api/auth/profile` to anonymous callers. `UpdateProfile_WithoutBearerToken_ReturnsUnauthorized`
+  guards this.
+  Validation uses `ISigningKeyProvider`, which resolves the same SysConfig key **lazily** and caches
+  it, so startup never blocks on the database. Issuer/audience are not validated; lifetime and
+  signature are.
+- **401 handling:** `authInterceptor` attaches the bearer token and, on any 401, clears the session —
+  so an expired token drops you back to `/login` rather than looping.
+- **The `Auth:Disabled` / `authDisabled` escape hatch** must be flipped on both sides at once; see
+  [setup-notes.md](setup-notes.md).
+
+### My Profile (個人資料) — `/profile`
+
+`PUT /api/auth/profile` takes `{userName}` and returns `{userId, userName, accessToken}`. The page
+shows UserId and roles read-only and lets a user rename **only themselves**.
+
+- **The account renamed comes from the JWT** (`ClaimTypes.NameIdentifier`), never the body.
+  `UpdateProfileRequest` deliberately has no `UserId` and no roles field, so a `userId` sent in the
+  JSON binds to nothing and is dropped — a caller cannot rename or elevate anyone else.
+- **UserName only:** `UpdateUserNameAsync` writes that one column, leaving `IsActive`,
+  `PasswordHash` and `AppUserRole` unreachable. Empty/whitespace → 400; the name is trimmed first.
+- **The token is re-issued** with the new `Name` claim, so it never goes stale — note this also
+  **resets the 24h expiry**. Roles on the new token are re-read from the database rather than copied
+  from the caller's token, so a rename can never widen them. `AuthService.updateUserName` stores the
+  re-issued token, which refreshes session storage and the shell's userName.
+- Admin-editing *another* user's name is a different path: the AppUser CRUD feature.
+
+### Change Password (變更密碼) — on the `/profile` page
+
+`POST /api/auth/change-password` takes `{currentPassword, newPassword, confirmNewPassword}` and
+returns **204 with no body**. Like the rename, the account comes from the JWT, not the body.
+
+- **Plaintext in, nothing out.** No hash crosses the boundary in either direction: hashing is the
+  server's job, and accepting a client-supplied hash would let a caller replay a stolen one verbatim.
+- **Order of checks matters:** current password → complexity → confirm match. The current-password
+  check is first so a wrong guess reveals nothing about the new password's rule; complexity precedes
+  the match check so someone retyping a weak password consistently still hears the real problem.
+- **Complexity** (`Security/PasswordPolicy.cs`): ≥ 8 chars **and** ≥ 3 of 4 classes (upper / lower /
+  digit / symbol, where symbol is any non-alphanumeric). One bilingual message covers both halves —
+  saying which half failed narrows a guess. `core/utils/password-policy.ts` mirrors it client-side
+  for instant feedback, message character-for-character identical; **the server re-checks and is the
+  authority**.
+- **On success:** `PasswordHash = SHA256(new)` (uppercase hex, via `PasswordHasher`) and
+  `PasswordUpdatedTime` is stamped. Unlike `ResetPasswordAsync` (which uses SQL `GETUTCDATE()`),
+  `ChangePasswordAsync` **takes the timestamp as a parameter** so it is assertable in the mocked-repo
+  tests — the suite has no database.
+- **The session survives a password change:** the JWT encodes identity and roles, not the password,
+  so it stays valid until its 24h expiry. Existing tokens elsewhere are *not* revoked — this API is
+  stateless and has no token blacklist.
 
 ## AppRole (角色) — no spec file
 
@@ -25,8 +124,15 @@ Angular model:
 - **Create:** SHA-256 (uppercase hex) of `SysConfig['appConfig'].defaultPassword`, with
   `PasswordUpdatedTime = GETUTCDATE()`.
 - **Update:** never touches it.
-- **Reset:** `POST /api/appusers/{id}/reset-password` re-applies the default (重設密碼 button on the
-  detail page).
+- **Reset:** `POST /api/appusers/{id}/reset-password` re-applies the default, returning 204 with no
+  body. Reachable from the detail page *and* the edit form (重設密碼為預設值), both Admin-gated.
+  **This endpoint is `[Authorize(Roles = AppRoles.Admin)]` — the only one needing more than the
+  global filter's "any authenticated user".** Resetting someone else's password is an account-takeover
+  primitive, so the role is enforced server-side; a non-Admin gets **403** whatever the UI shows. The
+  buttons are hidden for non-Admins purely so nobody clicks into a 403 — that is not the control.
+- Self-service password change is a separate path with no Admin involvement: see **Change Password**
+  under Auth. `ResetPasswordAsync` reads SysConfig and stamps `GETUTCDATE()` internally, so unlike
+  `ChangePasswordAsync` its hash/timestamp are not assertable in the mocked-repo suite.
 
 ## PublishStatus (發布狀態) — [spec/admin/PublishStatus.md](../spec/admin/PublishStatus.md)
 

@@ -1,5 +1,10 @@
-import { Component, signal } from '@angular/core';
-import { RouterOutlet, RouterLink, RouterLinkActive } from '@angular/router';
+import { Component, computed, inject, signal } from '@angular/core';
+import { RouterOutlet, RouterLink, RouterLinkActive, Router, NavigationEnd } from '@angular/router';
+import { MenuItem } from 'primeng/api';
+import { MenuModule } from 'primeng/menu';
+import { filter } from 'rxjs';
+
+import { AuthService } from './core/services/auth.service';
 
 interface NavItem {
   label: string;
@@ -14,19 +19,22 @@ interface NavSection {
 }
 
 // Ultima-style grouped menu: uppercase section headers → items → optional children.
-function buildSections(): NavSection[] {
-  const systemItems: NavItem[] = [
-    {
-      label: '系統管理 Admin',
-      icon: 'pi pi-shield',
-      expanded: true,
-      children: [
-        { label: '角色 AppRole', icon: 'pi pi-id-card', route: '/app-roles' },
-        { label: '使用者 AppUser', icon: 'pi pi-user', route: '/app-users' },
-        { label: '發布狀態 PublishStatus', icon: 'pi pi-flag', route: '/publish-statuses' },
-      ],
-    },
-  ];
+// The "系統管理 Admin" item is only included for users whose roles include "Admin".
+function buildSections(isAdmin: boolean): NavSection[] {
+  const systemItems: NavItem[] = isAdmin
+    ? [
+        {
+          label: '系統管理 Admin',
+          icon: 'pi pi-shield',
+          expanded: true,
+          children: [
+            { label: '角色 AppRole', icon: 'pi pi-id-card', route: '/app-roles' },
+            { label: '使用者 AppUser', icon: 'pi pi-user', route: '/app-users' },
+            { label: '發布狀態 PublishStatus', icon: 'pi pi-flag', route: '/publish-statuses' },
+          ],
+        },
+      ]
+    : [];
 
   return [
     {
@@ -71,13 +79,41 @@ function buildSections(): NavSection[] {
 @Component({
   selector: 'app-root',
   standalone: true,
-  imports: [RouterOutlet, RouterLink, RouterLinkActive],
+  imports: [RouterOutlet, RouterLink, RouterLinkActive, MenuModule],
   templateUrl: './app.html',
   styleUrl: './app.scss',
 })
 export class App {
+  protected readonly authService = inject(AuthService);
+  private readonly router = inject(Router);
+
   protected readonly collapsed = signal(false);
-  protected readonly sections = signal<NavSection[]>(buildSections());
+  protected readonly isLoginPage = signal(this.router.url.startsWith('/login'));
+
+  protected readonly sections = computed<NavSection[]>(() =>
+    buildSections(this.authService.hasRole('Admin')),
+  );
+
+  // Avatar dropdown. Available to every signed-in user regardless of role.
+  protected readonly userMenuItems: MenuItem[] = [
+    {
+      label: '個人資料 My Profile',
+      icon: 'pi pi-user',
+      routerLink: '/profile',
+    },
+    { separator: true },
+    {
+      label: '登出 Logout',
+      icon: 'pi pi-sign-out',
+      command: () => this.logout(),
+    },
+  ];
+
+  constructor() {
+    this.router.events.pipe(filter((event) => event instanceof NavigationEnd)).subscribe(() => {
+      this.isLoginPage.set(this.router.url.startsWith('/login'));
+    });
+  }
 
   toggleCollapse(): void {
     this.collapsed.update((c) => !c);
@@ -85,5 +121,9 @@ export class App {
 
   toggleItem(item: NavItem): void {
     if (item.children) item.expanded = !item.expanded;
+  }
+
+  logout(): void {
+    this.authService.logout();
   }
 }

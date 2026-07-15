@@ -7,13 +7,17 @@
   </div>
   <div class="page-actions">
     <p-button label="返回" icon="pi pi-arrow-left" severity="secondary" [outlined]="true" (onClick)="back()" />
-    <p-button
-      label="重設密碼"
-      icon="pi pi-key"
-      severity="warn"
-      [outlined]="true"
-      [disabled]="!user()"
-      (onClick)="confirmResetPassword()" />
+    <!-- Admin only: the API enforces the role, so a non-Admin would only get a 403 here. -->
+    @if (isAdmin()) {
+      <p-button
+        label="重設密碼"
+        icon="pi pi-key"
+        severity="warn"
+        [outlined]="true"
+        [disabled]="!user()"
+        data-testid="reset-password-button"
+        (onClick)="confirmResetPassword()" />
+    }
     <p-button label="編輯" icon="pi pi-pencil" (onClick)="edit()" />
   </div>
 </div>

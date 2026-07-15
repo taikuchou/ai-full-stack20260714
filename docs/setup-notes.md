@@ -38,12 +38,22 @@ npx ng test --watch=false --browsers=ChromeHeadless
 **End-to-end running requires the `CMS` database on `.\SQLEXPRESS`** built from `database/*.sql`;
 builds and unit tests do not.
 
-## No authentication
+## Authentication: login enforced
 
-**The app has no login.** Every API endpoint is open and every route reachable — there is no guard,
-no token, and no user identity anywhere in the client. Removed in full on 2026-07-15 (branch
-`remove-auth`); recover it with `git revert` of the removal commit, which restores the JWT stack,
-the login page and their tests intact.
+**Login is on and enforced, including locally.** `POST /api/auth/login` issues a 24h JWT; a global
+`AuthorizeFilter` plus JWT bearer validation reject every other endpoint without one, and `authGuard`
+sends unauthenticated users to `/login`. See [features.md](features.md) for the endpoint contract.
+
+Running the app therefore **requires a real AppUser account** — `ng serve` lands on the login screen
+and every request 401s until you sign in. Seeded accounts live in `AppUser`; a forgotten password is
+recoverable by overwriting `PasswordHash` with the SHA-256 (uppercase hex) of a known string, since
+the reset-password endpoint is itself behind auth.
+
+**The `Auth:Disabled` escape hatch.** `appsettings.Development.json` has `Auth:Disabled` and the
+client has `authDisabled` in `environment.development.ts`. Both are **false**. Setting them bypasses
+auth for local work — but they must be **set together**: flipping only the client bypasses the login
+screen while every API call still 401s, and flipping only the API leaves a login screen you cannot
+skip. They were both `true` before 2026-07-15, which is why login appeared to "not work" locally.
 
 `PasswordHasher` (`CMS.API/Security/`) **survived the removal** — it is not auth infrastructure here.
 `AppUserRepository` uses it to hash the default password on AppUser create and reset-password, so it
