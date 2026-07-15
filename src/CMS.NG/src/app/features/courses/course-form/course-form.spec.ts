@@ -136,6 +136,32 @@ describe('CourseForm', () => {
     });
   });
 
+  describe('sticky action toolbar', () => {
+    function expectStickyToolbar(fixture: ComponentFixture<CourseForm>): void {
+      const toolbar = fixture.nativeElement.querySelector('.page-header') as HTMLElement;
+      expect(toolbar).withContext('action toolbar renders').toBeTruthy();
+
+      const style = getComputedStyle(toolbar);
+      expect(style.position).toBe('sticky');
+      expect(style.top).toBe('0px');
+      expect(Number(style.zIndex)).toBeGreaterThan(0);
+
+      const labels = Array.from(
+        toolbar.querySelectorAll('.page-actions button')
+      ).map((b) => (b.textContent ?? '').trim());
+      expect(labels).toContain('儲存');
+      expect(labels).toContain('取消');
+    }
+
+    it('should pin the toolbar with Save/Cancel on the new form', () => {
+      expectStickyToolbar(setup(null));
+    });
+
+    it('should pin the toolbar with Save/Cancel on the edit form', () => {
+      expectStickyToolbar(setup('1'));
+    });
+  });
+
   describe('edit mode', () => {
     it('should load the course and patch the form', () => {
       const fixture = setup('1');
