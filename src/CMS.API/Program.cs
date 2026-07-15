@@ -1,3 +1,4 @@
+using CMS.API.Auditing;
 using CMS.API.Data;
 using CMS.API.Data.TypeHandlers;
 using CMS.API.Repositories;
@@ -73,8 +74,12 @@ builder.Services.AddSwaggerGen(c =>
     c.SwaggerDoc("v1", new OpenApiInfo { Title = "CMS API", Version = "v1" });
 });
 
+// RowAuditWriter reads the signed-in UserName off the current request's JWT.
+builder.Services.AddHttpContextAccessor();
+
 // Data access
 builder.Services.AddSingleton<IDbConnectionFactory, SqlConnectionFactory>();
+builder.Services.AddScoped<IRowAuditWriter, RowAuditWriter>();
 builder.Services.AddScoped<IAppRoleRepository, AppRoleRepository>();
 builder.Services.AddScoped<IAppUserRepository, AppUserRepository>();
 builder.Services.AddScoped<IAuthRepository, AuthRepository>();
