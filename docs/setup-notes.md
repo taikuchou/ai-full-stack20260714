@@ -38,25 +38,13 @@ npx ng test --watch=false --browsers=ChromeHeadless
 **End-to-end running requires the `CMS` database on `.\SQLEXPRESS`** built from `database/*.sql`;
 builds and unit tests do not.
 
-## Login is disabled locally
+## No authentication
 
-Development skips the login screen. Two flags, and **both must agree** — the API rejects every
-request without a token, so turning off only the client's guard leaves the app 401ing on load:
+**The app has no login.** Every API endpoint is open and every route reachable — there is no guard,
+no token, and no user identity anywhere in the client. Removed in full on 2026-07-15 (branch
+`remove-auth`); recover it with `git revert` of the removal commit, which restores the JWT stack,
+the login page and their tests intact.
 
-| Side | Flag | File |
-|---|---|---|
-| Angular | `authDisabled: true` | `src/environments/environment.development.ts` |
-| API | `Auth:Disabled: true` | `src/CMS.API/appsettings.Development.json` |
-
-`authGuard` returns true outright, and `Program.cs` skips the global `AuthorizeFilter`; the API logs
-a warning at startup when the flag is on. **To log in again, set both to false.** Production is
-unaffected: `environment.ts` and `appsettings.json` leave the flag off, and `/login` stays routable
-either way.
-
-**Tests pin the flag off themselves** — `AuthorizationIntegrationTests` calls
-`UseSetting("Auth:Disabled", "false")` because `WebApplicationFactory` runs in the *Development*
-environment and would otherwise read the appsettings above and assert nothing. Note `UseSetting`,
-not `ConfigureAppConfiguration`: under the minimal hosting model, top-level statements read
-`builder.Configuration` before `ConfigureAppConfiguration` callbacks apply at `Build()`. The Angular
-specs build against `environment.ts` (the test target has no `fileReplacements`), so the flag is off
-there too and `auth.guard.spec.ts` toggles it explicitly.
+`PasswordHasher` (`CMS.API/Security/`) **survived the removal** — it is not auth infrastructure here.
+`AppUserRepository` uses it to hash the default password on AppUser create and reset-password, so it
+stays regardless of whether login exists.

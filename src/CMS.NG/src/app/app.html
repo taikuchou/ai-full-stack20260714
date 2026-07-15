@@ -1,121 +1,101 @@
-@if (isLoginPage()) {
-  <router-outlet />
-} @else {
-  <div class="layout" [class.collapsed]="collapsed()">
-    <!-- Topbar -->
-    <header class="topbar">
-      <div class="topbar-left">
-        <span class="logo">
-          <i class="pi pi-th-large logo-mark"></i>
-          <span class="logo-text">CMS</span>
-        </span>
-        <button
-          class="topbar-toggle"
-          type="button"
-          (click)="toggleCollapse()"
-          aria-label="收合選單"
-        >
-          <i
-            class="pi"
-            [class.pi-angle-left]="!collapsed()"
-            [class.pi-angle-right]="collapsed()"
-          ></i>
-        </button>
-      </div>
-      <div class="topbar-right">
-        <button class="topbar-icon" type="button" aria-label="搜尋">
-          <i class="pi pi-search"></i>
-        </button>
-        <button class="topbar-icon" type="button" aria-label="設定">
-          <i class="pi pi-cog"></i>
-        </button>
-        <button class="topbar-icon" type="button" aria-label="通知">
-          <i class="pi pi-bell"></i>
-        </button>
-        <span class="topbar-username">{{ authService.profile()?.userName }}</span>
-        <button class="topbar-icon" type="button" aria-label="登出" title="登出" (click)="logout()">
-          <i class="pi pi-sign-out"></i>
-        </button>
-        <span class="topbar-avatar">{{ (authService.profile()?.userName ?? '?').charAt(0) }}</span>
-      </div>
-    </header>
-
-    <div class="body">
-      <!-- Sidebar -->
-      <aside class="sidebar">
-        <nav class="nav">
-          @for (section of sections(); track section.header) {
-            @if (section.items.length) {
-              <div class="nav-section">
-                <span class="nav-section-header">{{ section.header }}</span>
-
-                @for (item of section.items; track item.label) {
-                  @if (item.children) {
-                    <!-- Expandable item -->
-                    <button
-                      type="button"
-                      class="nav-item"
-                      [class.open]="item.expanded"
-                      (click)="toggleItem(item)"
-                    >
-                      <i class="nav-icon" [class]="item.icon"></i>
-                      <span class="nav-label">{{ item.label }}</span>
-                      <i
-                        class="pi caret"
-                        [class.pi-angle-down]="item.expanded"
-                        [class.pi-angle-right]="!item.expanded"
-                      ></i>
-                    </button>
-
-                    @if (item.expanded) {
-                      <div class="nav-children">
-                        @for (child of item.children; track child.label) {
-                          <a
-                            class="nav-item nav-child"
-                            [routerLink]="child.route"
-                            routerLinkActive="active"
-                          >
-                            <i class="nav-icon" [class]="child.icon"></i>
-                            <span class="nav-label">{{ child.label }}</span>
-                          </a>
-                        }
-                      </div>
-                    }
-                  } @else if (item.route) {
-                    <!-- Direct link -->
-                    <a class="nav-item" [routerLink]="item.route" routerLinkActive="active">
-                      <i class="nav-icon" [class]="item.icon"></i>
-                      <span class="nav-label">{{ item.label }}</span>
-                    </a>
-                  } @else {
-                    <!-- Placeholder (not yet implemented) -->
-                    <span class="nav-item placeholder">
-                      <i class="nav-icon" [class]="item.icon"></i>
-                      <span class="nav-label">{{ item.label }}</span>
-                    </span>
-                  }
-                }
-              </div>
-            }
-          }
-        </nav>
-
-        <!-- User profile footer -->
-        <div class="nav-profile">
-          <span class="profile-avatar">{{
-            (authService.profile()?.userName ?? '?').charAt(0)
-          }}</span>
-          <span class="profile-info">
-            <span class="profile-name">{{ authService.profile()?.userName }}</span>
-            <span class="profile-role">{{ authService.profile()?.userId }}</span>
-          </span>
-        </div>
-      </aside>
-
-      <!-- Main content -->
-      <main class="content">
-        <router-outlet />
-      </main>
+<div class="layout" [class.collapsed]="collapsed()">
+  <!-- Topbar -->
+  <header class="topbar">
+    <div class="topbar-left">
+      <span class="logo">
+        <i class="pi pi-th-large logo-mark"></i>
+        <span class="logo-text">CMS</span>
+      </span>
+      <button
+        class="topbar-toggle"
+        type="button"
+        (click)="toggleCollapse()"
+        aria-label="收合選單"
+      >
+        <i
+          class="pi"
+          [class.pi-angle-left]="!collapsed()"
+          [class.pi-angle-right]="collapsed()"
+        ></i>
+      </button>
     </div>
+    <div class="topbar-right">
+      <button class="topbar-icon" type="button" aria-label="搜尋">
+        <i class="pi pi-search"></i>
+      </button>
+      <button class="topbar-icon" type="button" aria-label="設定">
+        <i class="pi pi-cog"></i>
+      </button>
+      <button class="topbar-icon" type="button" aria-label="通知">
+        <i class="pi pi-bell"></i>
+      </button>
+    </div>
+  </header>
+
+  <div class="body">
+    <!-- Sidebar -->
+    <aside class="sidebar">
+      <nav class="nav">
+        @for (section of sections(); track section.header) {
+          @if (section.items.length) {
+            <div class="nav-section">
+              <span class="nav-section-header">{{ section.header }}</span>
+
+              @for (item of section.items; track item.label) {
+                @if (item.children) {
+                  <!-- Expandable item -->
+                  <button
+                    type="button"
+                    class="nav-item"
+                    [class.open]="item.expanded"
+                    (click)="toggleItem(item)"
+                  >
+                    <i class="nav-icon" [class]="item.icon"></i>
+                    <span class="nav-label">{{ item.label }}</span>
+                    <i
+                      class="pi caret"
+                      [class.pi-angle-down]="item.expanded"
+                      [class.pi-angle-right]="!item.expanded"
+                    ></i>
+                  </button>
+
+                  @if (item.expanded) {
+                    <div class="nav-children">
+                      @for (child of item.children; track child.label) {
+                        <a
+                          class="nav-item nav-child"
+                          [routerLink]="child.route"
+                          routerLinkActive="active"
+                        >
+                          <i class="nav-icon" [class]="child.icon"></i>
+                          <span class="nav-label">{{ child.label }}</span>
+                        </a>
+                      }
+                    </div>
+                  }
+                } @else if (item.route) {
+                  <!-- Direct link -->
+                  <a class="nav-item" [routerLink]="item.route" routerLinkActive="active">
+                    <i class="nav-icon" [class]="item.icon"></i>
+                    <span class="nav-label">{{ item.label }}</span>
+                  </a>
+                } @else {
+                  <!-- Placeholder (not yet implemented) -->
+                  <span class="nav-item placeholder">
+                    <i class="nav-icon" [class]="item.icon"></i>
+                    <span class="nav-label">{{ item.label }}</span>
+                  </span>
+                }
+              }
+            </div>
+          }
+        }
+      </nav>
+    </aside>
+
+    <!-- Main content -->
+    <main class="content">
+      <router-outlet />
+    </main>
   </div>
-}
+</div>

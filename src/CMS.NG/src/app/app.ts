@@ -1,8 +1,5 @@
-import { Component, computed, inject, signal } from '@angular/core';
-import { RouterOutlet, RouterLink, RouterLinkActive, Router, NavigationEnd } from '@angular/router';
-import { filter } from 'rxjs';
-
-import { AuthService } from './core/services/auth.service';
+import { Component, signal } from '@angular/core';
+import { RouterOutlet, RouterLink, RouterLinkActive } from '@angular/router';
 
 interface NavItem {
   label: string;
@@ -17,22 +14,19 @@ interface NavSection {
 }
 
 // Ultima-style grouped menu: uppercase section headers → items → optional children.
-// The "系統管理 Admin" item is only included for users whose roles include "Admin".
-function buildSections(isAdmin: boolean): NavSection[] {
-  const systemItems: NavItem[] = isAdmin
-    ? [
-        {
-          label: '系統管理 Admin',
-          icon: 'pi pi-shield',
-          expanded: true,
-          children: [
-            { label: '角色 AppRole', icon: 'pi pi-id-card', route: '/app-roles' },
-            { label: '使用者 AppUser', icon: 'pi pi-user', route: '/app-users' },
-            { label: '發布狀態 PublishStatus', icon: 'pi pi-flag', route: '/publish-statuses' },
-          ],
-        },
-      ]
-    : [];
+function buildSections(): NavSection[] {
+  const systemItems: NavItem[] = [
+    {
+      label: '系統管理 Admin',
+      icon: 'pi pi-shield',
+      expanded: true,
+      children: [
+        { label: '角色 AppRole', icon: 'pi pi-id-card', route: '/app-roles' },
+        { label: '使用者 AppUser', icon: 'pi pi-user', route: '/app-users' },
+        { label: '發布狀態 PublishStatus', icon: 'pi pi-flag', route: '/publish-statuses' },
+      ],
+    },
+  ];
 
   return [
     {
@@ -82,21 +76,8 @@ function buildSections(isAdmin: boolean): NavSection[] {
   styleUrl: './app.scss',
 })
 export class App {
-  protected readonly authService = inject(AuthService);
-  private readonly router = inject(Router);
-
   protected readonly collapsed = signal(false);
-  protected readonly isLoginPage = signal(this.router.url.startsWith('/login'));
-
-  protected readonly sections = computed<NavSection[]>(() =>
-    buildSections(this.authService.hasRole('Admin')),
-  );
-
-  constructor() {
-    this.router.events.pipe(filter((event) => event instanceof NavigationEnd)).subscribe(() => {
-      this.isLoginPage.set(this.router.url.startsWith('/login'));
-    });
-  }
+  protected readonly sections = signal<NavSection[]>(buildSections());
 
   toggleCollapse(): void {
     this.collapsed.update((c) => !c);
@@ -104,9 +85,5 @@ export class App {
 
   toggleItem(item: NavItem): void {
     if (item.children) item.expanded = !item.expanded;
-  }
-
-  logout(): void {
-    this.authService.logout();
   }
 }
