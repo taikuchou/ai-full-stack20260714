@@ -7,7 +7,8 @@ and nullability derive from it.
 
 - `database/` schema (source of truth); `spec/` conventions, build specs, mockups
 - `src/CMS.API/` .NET 9 Web API, Dapper (no EF), /swagger
-- `src/CMS.API.Tests/` xUnit + Moq (controllers vs mocked repo, no database)
+- `src/CMS.API.Tests/` xUnit + Moq (controllers vs mocked repo, no database). Exception: repository
+  behaviour needs a real DbConnection — those few tests are `[DatabaseFact]` and skip without the DB
 - `src/CMS.NG/` Angular 20 + PrimeNG
 
 ## Read when you need it
@@ -34,3 +35,60 @@ The few things you would get wrong *before* knowing to open a doc:
 - **Copy the reference feature, not the nearest one.**
   [spec/code-gen.convention.md](spec/code-gen.convention.md) names one per PK/FK pattern; it also
   says which to avoid.
+
+## Cross-Cutting Conventions
+
+Apply to **every** feature. All of it already exists — wire into it, don't rebuild it.
+
+### Row audit — every repository write is logged
+
+Backend checklist, per repository (`PartnerRepository` = smallest example, `CourseRepository` = FKs + N-N):
+
+- [ ] Inject `IRowAuditWriter` (`CMS.API/Auditing/`); call `LogInsertAsync` / `LogUpdateAsync` /
+      `LogDeleteAsync` after the change succeeds. `TableName` is the real table name (`"Course"`).
+- [ ] Pass the operation's **own connection + transaction** — the audit row commits with the change,
+      so a failed or rolled-back change leaves no audit row. Add a transaction if the method lacks one.
+- [ ] **Update: load the "before" row first**, in that same transaction, then log `before, after`.
+      Reading on a second connection deadlocks against the transaction's own locks.
+- [ ] **Delete: load the row first** — afterwards its first string column is gone.
+- [ ] Never insert `pkid` (IDENTITY).
+
+The writer already handles, so don't re-implement: `ActionDesc` (Insert/Delete = the row's first
+string-type column value; Update = comma-separated changed column names, truncated at 1000; no
+change → **no row**), `PrimaryKeyValues` = pkid as a string, `UserName` = the JWT user → `"system"`,
+`DateTime` = UtcNow.
+
+Frontend checklist:
+
+- [ ] **Every detail and form page** places the badge at the **start of the header toolbar** — i.e.
+      directly after the `<h1>` inside `.page-title`. (There is no `p-toolbar` in this app;
+      `.page-header` is it, and `.page-title` is its start slot. The badge styles its own placement.)
+      ```html
+      <app-row-audit-badge tableName="Partner" [pkid]="partner().pkid" />
+      ```
+- [ ] Pass **`null` while adding** — an unsaved row has no history and must not be queried.
+- [ ] **AppRole / AppUser: pass the numeric `pkid`**, not RoleId/UserId — the trail is keyed by the
+      entity's `pkid` property.
+- [ ] A page spec rendering a page with the badge needs `provideHttpClient()` +
+      `provideHttpClientTesting()` (the badge fetches on init).
+
+It shows the latest change inline and opens the full trail
+(`GET /api/rowaudit?tableName=&pkid=`) on click. **API datetimes are UTC with no offset** — format
+via the badge's `parseUtc`; plain `new Date(s)` renders 8 hours early at UTC+8.
+
+Fuller detail, and the one exclusion (FeaturedPromoItem's inline cell editor):
+[docs/features.md](docs/features.md) › RowAudit.
+
+### Exception handling — the safety net is global
+
+- [ ] **No per-controller/repository try/catch for unexpected errors.** `GlobalExceptionHandler`
+      (`CMS.API/Middleware/`) logs the full detail server-side and returns a generic 500 carrying a
+      traceId — never a stack trace, exception message, or SQL. Catch only to *add meaning*, then
+      return a deliberate status.
+- [ ] **Deliberate responses stay as they are** and never reach the handler: 401/403 from the auth
+      pipeline, validation 400s, 404s. Keep returning them from the controller as today.
+- [ ] **Frontend errors are surfaced once, globally.** `errorInterceptor` toasts 500-class responses
+      (and status 0 = unreachable API) through the root `MessageService` and the shell's
+      `<p-toast />`. Don't add per-page handling for server errors; a page's own `<p-toast />` is for
+      its own save/load messages.
+- [ ] `authInterceptor` owns **401 → logout → /login**. Pages still handle their own 400/404.

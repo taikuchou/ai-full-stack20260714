@@ -1,6 +1,7 @@
 using CMS.API.Auditing;
 using CMS.API.Data;
 using CMS.API.Data.TypeHandlers;
+using CMS.API.Middleware;
 using CMS.API.Repositories;
 using CMS.API.Security;
 using Dapper;
@@ -11,6 +12,11 @@ using Microsoft.IdentityModel.Tokens;
 using Microsoft.OpenApi.Models;
 
 var builder = WebApplication.CreateBuilder(args);
+
+// Unhandled exceptions return a generic 500 with the detail kept in the log — see
+// GlobalExceptionHandler. Controllers must not try/catch unexpected errors themselves.
+builder.Services.AddExceptionHandler<GlobalExceptionHandler>();
+builder.Services.AddProblemDetails();
 
 // Dapper type handlers for DateOnly / TimeOnly (SqlClient does not map these natively).
 SqlMapper.AddTypeHandler(new DateOnlyTypeHandler());
@@ -92,6 +98,11 @@ builder.Services.AddScoped<ILookupRepository, LookupRepository>();
 builder.Services.AddScoped<IRowAuditRepository, RowAuditRepository>();
 
 var app = builder.Build();
+
+// First in our pipeline, so it wraps everything below. It also shields Development: WebApplication
+// auto-adds the developer exception page *outside* this, but an exception is caught here first and
+// never propagates out to it — so stack traces do not leak locally either.
+app.UseExceptionHandler();
 
 if (authDisabled)
 {

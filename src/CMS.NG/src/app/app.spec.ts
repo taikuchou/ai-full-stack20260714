@@ -1,6 +1,7 @@
 import { TestBed } from '@angular/core/testing';
 import { signal } from '@angular/core';
 import { provideRouter } from '@angular/router';
+import { MessageService } from 'primeng/api';
 import { App } from './app';
 import { routes } from './app.routes';
 import { AuthService } from './core/services/auth.service';
@@ -20,7 +21,12 @@ describe('App', () => {
     configure(profile);
     await TestBed.configureTestingModule({
       imports: [App],
-      providers: [provideRouter(routes), { provide: AuthService, useValue: authServiceSpy }],
+      providers: [
+        provideRouter(routes),
+        // The shell hosts the app-level <p-toast /> that errorInterceptor writes to.
+        MessageService,
+        { provide: AuthService, useValue: authServiceSpy },
+      ],
     }).compileComponents();
     return TestBed.createComponent(App);
   }

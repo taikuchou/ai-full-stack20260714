@@ -2,6 +2,7 @@ import { Component, computed, inject, signal } from '@angular/core';
 import { RouterOutlet, RouterLink, RouterLinkActive, Router, NavigationEnd } from '@angular/router';
 import { MenuItem } from 'primeng/api';
 import { MenuModule } from 'primeng/menu';
+import { ToastModule } from 'primeng/toast';
 import { filter } from 'rxjs';
 
 import { AuthService } from './core/services/auth.service';
@@ -79,7 +80,7 @@ function buildSections(isAdmin: boolean): NavSection[] {
 @Component({
   selector: 'app-root',
   standalone: true,
-  imports: [RouterOutlet, RouterLink, RouterLinkActive, MenuModule],
+  imports: [RouterOutlet, RouterLink, RouterLinkActive, MenuModule, ToastModule],
   templateUrl: './app.html',
   styleUrl: './app.scss',
 })
