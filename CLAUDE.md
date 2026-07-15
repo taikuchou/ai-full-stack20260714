@@ -40,7 +40,8 @@ in `Program.cs`. `IDbConnectionFactory` reads `ConnectionStrings:CMS`; CORS from
 `core/models/`, `core/services/`. List = `p-table` + `p-drawer` filter with session-storage
 `{entity}-list-filters`/`-sort`/`-page`. Form = reactive, `forkJoin` lookups, `p-multiselect` for
 n-n. API URL from `environment.ts`/`.development.ts` (`fileReplacements`); import `@env/environment`.
-Theme `Aura` in `app.config.ts`; shell = Ultima; menu = `sections` signal.
+Theme `Aura` in `app.config.ts`; shell = Ultima; menu = `sections` signal; topbar brand text
+(`app.html` `.logo-text`) = `CMS`.
 
 ## Implemented features
 

@@ -16,11 +16,11 @@ describe('App', () => {
     expect(fixture.componentInstance).toBeTruthy();
   });
 
-  it('should render the UWA brand and the AppRole nav item', () => {
+  it('should render the CMS brand and the AppRole nav item', () => {
     const fixture = TestBed.createComponent(App);
     fixture.detectChanges();
     const compiled = fixture.nativeElement as HTMLElement;
-    expect(compiled.querySelector('.topbar .logo-text')?.textContent).toContain('UWA');
+    expect(compiled.querySelector('.topbar .logo-text')?.textContent).toContain('CMS');
     expect(compiled.textContent).toContain('角色 AppRole');
   });
 
