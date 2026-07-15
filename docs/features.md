@@ -51,6 +51,32 @@ Rules the retrofit follows, worth keeping to:
 `FeaturedPromoItemRepository.MoveAsync` also audits: a slot swap writes one Update row per moved row,
 recording the net move rather than the intermediate parking-slot state.
 
+### Viewing a record's trail
+
+`GET /api/rowaudit?tableName=Course&pkid=123` returns that record's history newest first
+(`RowAuditController` → `IRowAuditRepository`); an unchanged record is an empty list, not a 404.
+
+The reusable `RowAuditBadge` (`core/components/row-audit-badge/`, selector `app-row-audit-badge`)
+renders it. Drop it into a page header's `.page-title` — it needs no per-page CSS:
+
+```html
+<app-row-audit-badge tableName="Partner" [pkid]="partner().pkid" />
+```
+
+- It shows the latest change inline and opens the full trail in a dialog.
+- **Pass `null` for a new, unsaved record** — the badge then shows its empty state and fetches nothing.
+- **On AppRole/AppUser pass the numeric `pkid`, not RoleId/UserId** — the writer keys the trail by the
+  entity's `pkid` property, which on those tables is the display-only IDENTITY column.
+- **Timestamps are UTC with no offset** (`2026-07-15T07:21:04.203`). The component's `parseUtc` marks
+  them UTC before formatting to local; `new Date(value)` would read them as local and render every
+  entry 8 hours early. `RowAuditHistoryItem.dateTime` documents this.
+- It is on all 12 routed detail/form pages. **FeaturedPromoItem is excluded** — it has no detail page
+  and its form is an inline grid-cell editor with no header to host the badge; its rows are still
+  audited, just not viewable from that cell.
+
+A page spec that renders a page containing the badge needs `provideHttpClient()` +
+`provideHttpClientTesting()`, since the badge fetches on init.
+
 ## Auth (登入 / 個人資料) — not a CRUD feature, no sidebar entry
 
 `POST /api/auth/login` (`AuthController` + `AuthRepository`) takes `{userId, password}` and returns

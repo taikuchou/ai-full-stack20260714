@@ -1,4 +1,6 @@
 import { ComponentFixture, TestBed } from '@angular/core/testing';
+import { provideHttpClient } from '@angular/common/http';
+import { provideHttpClientTesting } from '@angular/common/http/testing';
 import { ActivatedRoute, Router } from '@angular/router';
 import { provideNoopAnimations } from '@angular/platform-browser/animations';
 import { of } from 'rxjs';
@@ -43,6 +45,8 @@ describe('PublishStatusForm', () => {
       imports: [PublishStatusForm],
       providers: [
         provideNoopAnimations(),
+        provideHttpClient(),
+        provideHttpClientTesting(),
         { provide: PublishStatusService, useValue: serviceSpy },
         { provide: Router, useValue: routerSpy },
         {

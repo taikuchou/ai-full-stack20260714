@@ -29,6 +29,7 @@ public class ServiceRegistrationTests : IClassFixture<WebApplicationFactory<Prog
         typeof(ICourseRepository),
         typeof(IFeaturedPromoItemRepository),
         typeof(ILookupRepository),
+        typeof(IRowAuditRepository),
     ];
 
     [Theory]

@@ -9,11 +9,19 @@ import { MessageService } from 'primeng/api';
 
 import { CourseGroupService } from '../../../core/services/course-group.service';
 import { CourseGroupRequest } from '../../../core/models/course-group.model';
+import { RowAuditBadge } from '../../../core/components/row-audit-badge/row-audit-badge';
 
 @Component({
   selector: 'app-course-group-form',
   standalone: true,
-  imports: [CommonModule, ReactiveFormsModule, ButtonModule, InputTextModule, ToastModule],
+  imports: [
+    CommonModule,
+    ReactiveFormsModule,
+    ButtonModule,
+    InputTextModule,
+    ToastModule,
+    RowAuditBadge,
+  ],
   providers: [MessageService],
   templateUrl: './course-group-form.html',
   styleUrl: './course-group-form.scss',
@@ -32,6 +40,9 @@ export class CourseGroupForm implements OnInit {
   // pkid is IDENTITY (DB-assigned) — not a form control. Held separately for the UPDATE key.
   private editPkid = 0;
 
+  /** The audit badge's record — null while adding, since an unsaved row has no history. */
+  readonly auditPkid = signal<number | null>(null);
+
   readonly form = this.fb.nonNullable.group({
     description: ['', [Validators.required, Validators.maxLength(100)]],
   });
@@ -43,6 +54,7 @@ export class CourseGroupForm implements OnInit {
     if (id) {
       const pkid = Number(id);
       this.editPkid = pkid;
+      this.auditPkid.set(pkid);
       this.service.getById(pkid).subscribe({
         next: (courseGroup) => {
           this.form.patchValue({ description: courseGroup.description });

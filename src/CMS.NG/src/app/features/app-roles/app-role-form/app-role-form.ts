@@ -12,6 +12,7 @@ import { MessageService } from 'primeng/api';
 
 import { AppRoleService } from '../../../core/services/app-role.service';
 import { AppRoleRequest, LookupItem } from '../../../core/models/app-role.model';
+import { RowAuditBadge } from '../../../core/components/row-audit-badge/row-audit-badge';
 
 @Component({
   selector: 'app-app-role-form',
@@ -24,6 +25,7 @@ import { AppRoleRequest, LookupItem } from '../../../core/models/app-role.model'
     InputNumberModule,
     MultiSelectModule,
     ToastModule,
+    RowAuditBadge,
   ],
   providers: [MessageService],
   templateUrl: './app-role-form.html',
@@ -42,6 +44,12 @@ export class AppRoleForm implements OnInit {
   readonly users = signal<LookupItem[]>([]);
 
   private editRoleId: string | null = null;
+
+  /**
+   * The audit badge's record — null while adding. The trail is keyed by the numeric pkid column,
+   * not RoleId, so this is only known once the role has loaded.
+   */
+  readonly auditPkid = signal<number | null>(null);
 
   readonly form = this.fb.nonNullable.group({
     roleId: ['', Validators.required],
@@ -64,6 +72,7 @@ export class AppRoleForm implements OnInit {
       next: ({ users, role }) => {
         this.users.set(users);
         if (role) {
+          this.auditPkid.set(role.pkid);
           this.form.patchValue({
             roleId: role.roleId,
             roleName: role.roleName,

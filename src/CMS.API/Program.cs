@@ -89,6 +89,7 @@ builder.Services.AddScoped<ICourseGroupRepository, CourseGroupRepository>();
 builder.Services.AddScoped<ICourseRepository, CourseRepository>();
 builder.Services.AddScoped<IFeaturedPromoItemRepository, FeaturedPromoItemRepository>();
 builder.Services.AddScoped<ILookupRepository, LookupRepository>();
+builder.Services.AddScoped<IRowAuditRepository, RowAuditRepository>();
 
 var app = builder.Build();
 

@@ -13,6 +13,7 @@ import { ConfirmationService, MessageService } from 'primeng/api';
 import { AppUserService } from '../../../core/services/app-user.service';
 import { AuthService } from '../../../core/services/auth.service';
 import { AppUser, LookupItem } from '../../../core/models/app-user.model';
+import { RowAuditBadge } from '../../../core/components/row-audit-badge/row-audit-badge';
 
 @Component({
   selector: 'app-app-user-detail',
@@ -25,6 +26,7 @@ import { AppUser, LookupItem } from '../../../core/models/app-user.model';
     TagModule,
     ToastModule,
     ConfirmDialogModule,
+    RowAuditBadge,
   ],
   providers: [ConfirmationService, MessageService],
   templateUrl: './app-user-detail.html',
