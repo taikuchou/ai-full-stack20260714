@@ -9,6 +9,7 @@ import { QRCodeComponent } from 'angularx-qrcode';
 
 import { CourseService } from '../../../core/services/course.service';
 import { Course, LookupItem } from '../../../core/models/course.model';
+import { RowAuditBadge } from '../../../core/components/row-audit-badge/row-audit-badge';
 
 /** Public course page the QR code points at. */
 const COURSE_PAGE_BASE_URL = 'https://www.uuu.com.tw/Course/Show';
@@ -16,7 +17,15 @@ const COURSE_PAGE_BASE_URL = 'https://www.uuu.com.tw/Course/Show';
 @Component({
   selector: 'app-course-detail',
   standalone: true,
-  imports: [CommonModule, RouterLink, ButtonModule, ChipModule, TagModule, QRCodeComponent],
+  imports: [
+    CommonModule,
+    RouterLink,
+    ButtonModule,
+    ChipModule,
+    TagModule,
+    QRCodeComponent,
+    RowAuditBadge,
+  ],
   templateUrl: './course-detail.html',
   styleUrl: './course-detail.scss',
 })

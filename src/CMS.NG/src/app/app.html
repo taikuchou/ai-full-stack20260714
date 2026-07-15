@@ -1,3 +1,7 @@
+<!-- App-level toast for errorInterceptor's server-error messages. Outside the login/shell split so
+     a failed login request surfaces too. Pages keep their own <p-toast /> for their own messages. -->
+<p-toast position="top-right" />
+
 @if (isLoginPage()) {
   <router-outlet />
 } @else {

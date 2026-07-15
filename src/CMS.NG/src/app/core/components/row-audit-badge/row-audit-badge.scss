@@ -1,0 +1,119 @@
+// The host owns its own placement so dropping it into a page's .page-title needs no per-page CSS:
+// the h1 above is a block, so the badge lands on its own line beneath the title.
+:host {
+  display: inline-block;
+  max-width: 100%;
+  margin-top: 0.35rem;
+}
+
+// Palette matches the page-header / detail-card styling used across the features.
+.audit-badge {
+  display: inline-flex;
+  align-items: center;
+  gap: 0.4rem;
+  max-width: 100%;
+  padding: 0.2rem 0.6rem;
+  border: 1px solid #e2e8f0;
+  border-radius: 999px;
+  background: #f8fafc;
+  color: #475569;
+  font-size: 0.78rem;
+  line-height: 1.6;
+  cursor: pointer;
+  transition:
+    background 0.15s,
+    border-color 0.15s;
+
+  &:hover {
+    background: #eef2f7;
+    border-color: #cbd5e1;
+  }
+  &:focus-visible {
+    outline: 2px solid #6366f1;
+    outline-offset: 2px;
+  }
+
+  .pi-history {
+    font-size: 0.75rem;
+  }
+
+  &__label {
+    font-weight: 600;
+    white-space: nowrap;
+  }
+
+  // The inline latest-change summary; truncates rather than pushing the header around.
+  &__latest {
+    overflow: hidden;
+    text-overflow: ellipsis;
+    white-space: nowrap;
+    color: #64748b;
+  }
+
+  &--empty &__latest {
+    color: #94a3b8;
+    font-style: italic;
+  }
+}
+
+.audit-dialog__state {
+  padding: 1.5rem 0.5rem;
+  text-align: center;
+  color: #94a3b8;
+}
+
+.audit-table {
+  width: 100%;
+  border-collapse: collapse;
+  font-size: 0.85rem;
+
+  th,
+  td {
+    padding: 0.5rem 0.6rem;
+    text-align: left;
+    border-bottom: 1px solid #f1f5f9;
+    vertical-align: top;
+  }
+
+  th {
+    color: #64748b;
+    font-weight: 600;
+    white-space: nowrap;
+    border-bottom-color: #e2e8f0;
+  }
+
+  &__time {
+    white-space: nowrap;
+    font-variant-numeric: tabular-nums;
+    color: #475569;
+  }
+
+  // The changed-column list on an Update can be long — let it wrap rather than widen the dialog.
+  &__desc {
+    word-break: break-word;
+    color: #1e293b;
+  }
+}
+
+.audit-action {
+  display: inline-block;
+  padding: 0.05rem 0.45rem;
+  border-radius: 4px;
+  font-size: 0.72rem;
+  font-weight: 600;
+  background: #f1f5f9;
+  color: #475569;
+
+  &--insert {
+    background: #dcfce7;
+    color: #166534;
+  }
+  &--update {
+    background: #dbeafe;
+    color: #1e40af;
+  }
+  &--delete {
+    background: #fee2e2;
+    color: #991b1b;
+  }
+}

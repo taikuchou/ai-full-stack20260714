@@ -4,6 +4,10 @@
 <div class="page-header">
   <div class="page-title">
     <h1>檢視使用者</h1>
+    @if (user(); as u) {
+      <!-- AppUser's key is UserId, but the audit trail is keyed by the numeric pkid column. -->
+      <app-row-audit-badge tableName="AppUser" [pkid]="u.pkid" />
+    }
   </div>
   <div class="page-actions">
     <p-button label="返回" icon="pi pi-arrow-left" severity="secondary" [outlined]="true" (onClick)="back()" />

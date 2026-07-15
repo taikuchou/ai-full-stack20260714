@@ -1,4 +1,5 @@
 using System.Data;
+using CMS.API.Auditing;
 using CMS.API.Data;
 using CMS.API.Models;
 using Dapper;
@@ -7,9 +8,16 @@ namespace CMS.API.Repositories;
 
 public class FeaturedPromoItemRepository : IFeaturedPromoItemRepository
 {
-    private readonly IDbConnectionFactory _factory;
+    private const string TableName = "FeaturedPromoItem";
 
-    public FeaturedPromoItemRepository(IDbConnectionFactory factory) => _factory = factory;
+    private readonly IDbConnectionFactory _factory;
+    private readonly IRowAuditWriter _audit;
+
+    public FeaturedPromoItemRepository(IDbConnectionFactory factory, IRowAuditWriter audit)
+    {
+        _factory = factory;
+        _audit = audit;
+    }
 
     // Slot the moving row's counterpart parks on mid-swap. Never persisted: the transaction always
     // lands it on a real 1-3 slot before committing.
@@ -71,16 +79,16 @@ ORDER BY f.ScheduleOn ASC, f.Slot ASC";
     public async Task<FeaturedPromoItem?> GetByIdAsync(int pkid, CancellationToken ct = default)
     {
         using var conn = await _factory.CreateOpenConnectionAsync(ct);
-        return await conn.QueryFirstOrDefaultAsync<FeaturedPromoItem>(new CommandDefinition(
-            $"{SelectList} WHERE f.pkid = @Pkid", new { Pkid = pkid }, cancellationToken: ct));
+        return await LoadAsync(conn, null, pkid, ct);
     }
 
     public async Task<int> CreateAsync(FeaturedPromoItemRequest request, CancellationToken ct = default)
     {
         using var conn = await _factory.CreateOpenConnectionAsync(ct);
+        using var tx = conn.BeginTransaction();
 
         // pkid is IDENTITY — omit from the column list; return the DB-assigned value.
-        return await conn.ExecuteScalarAsync<int>(new CommandDefinition(@"
+        var newId = await conn.ExecuteScalarAsync<int>(new CommandDefinition(@"
 INSERT INTO FeaturedPromoItem
   (ScheduleOn, TrainingCenter_pkid, Slot, Promotion_pkid, Topic, Description)
 VALUES
@@ -95,12 +103,26 @@ SELECT CAST(SCOPE_IDENTITY() AS int);",
                 request.Topic,
                 request.Description
             },
-            cancellationToken: ct));
+            tx, cancellationToken: ct));
+
+        await _audit.LogInsertAsync(conn, tx, TableName, await RequireAsync(conn, tx, newId, ct), ct);
+
+        tx.Commit();
+        return newId;
     }
 
     public async Task<bool> UpdateAsync(FeaturedPromoItemRequest request, CancellationToken ct = default)
     {
         using var conn = await _factory.CreateOpenConnectionAsync(ct);
+        using var tx = conn.BeginTransaction();
+
+        // Read the "before" inside the transaction so the audited change list is accurate.
+        var before = await LoadAsync(conn, tx, request.Pkid, ct);
+        if (before is null)
+        {
+            tx.Rollback();
+            return false;
+        }
 
         var affected = await conn.ExecuteAsync(new CommandDefinition(@"
 UPDATE FeaturedPromoItem
@@ -121,19 +143,42 @@ WHERE pkid = @Pkid;",
                 request.Topic,
                 request.Description
             },
-            cancellationToken: ct));
+            tx, cancellationToken: ct));
 
-        return affected > 0;
+        if (affected == 0)
+        {
+            tx.Rollback();
+            return false;
+        }
+
+        await _audit.LogUpdateAsync(
+            conn, tx, TableName, before, await RequireAsync(conn, tx, request.Pkid, ct), ct);
+
+        tx.Commit();
+        return true;
     }
 
     public async Task<bool> DeleteAsync(int pkid, CancellationToken ct = default)
     {
         using var conn = await _factory.CreateOpenConnectionAsync(ct);
-        var affected = await conn.ExecuteAsync(new CommandDefinition(
-            "DELETE FROM FeaturedPromoItem WHERE pkid = @Pkid",
-            new { Pkid = pkid }, cancellationToken: ct));
+        using var tx = conn.BeginTransaction();
 
-        return affected > 0;
+        // Read the row before deleting it — afterwards its first string column is gone.
+        var row = await LoadAsync(conn, tx, pkid, ct);
+        if (row is null)
+        {
+            tx.Rollback();
+            return false;
+        }
+
+        await conn.ExecuteAsync(new CommandDefinition(
+            "DELETE FROM FeaturedPromoItem WHERE pkid = @Pkid",
+            new { Pkid = pkid }, tx, cancellationToken: ct));
+
+        await _audit.LogDeleteAsync(conn, tx, TableName, row, ct);
+
+        tx.Commit();
+        return true;
     }
 
     public async Task<MoveResult> MoveAsync(int pkid, int delta, CancellationToken ct = default)
@@ -171,6 +216,13 @@ WHERE ScheduleOn = @ScheduleOn
             new { item.ScheduleOn, item.TrainingCenterPkid, Slot = (byte)target },
             tx, cancellationToken: ct));
 
+        // Captured before any slot is touched: the audit records the net move, never the
+        // intermediate parking-slot state.
+        var movedBefore = await RequireAsync(conn, tx, pkid, ct);
+        var occupantBefore = occupantPkid is null
+            ? null
+            : await RequireAsync(conn, tx, occupantPkid.Value, ct);
+
         if (occupantPkid is null)
         {
             await SetSlotAsync(conn, tx, pkid, (byte)target, ct);
@@ -184,9 +236,31 @@ WHERE ScheduleOn = @ScheduleOn
             await SetSlotAsync(conn, tx, occupantPkid.Value, item.Slot, ct);
         }
 
+        // A swap moves two rows, so it audits two — one per row that actually changed.
+        await _audit.LogUpdateAsync(
+            conn, tx, TableName, movedBefore, await RequireAsync(conn, tx, pkid, ct), ct);
+
+        if (occupantBefore is not null)
+        {
+            await _audit.LogUpdateAsync(
+                conn, tx, TableName, occupantBefore,
+                await RequireAsync(conn, tx, occupantPkid!.Value, ct), ct);
+        }
+
         tx.Commit();
         return MoveResult.Moved;
     }
+
+    private static Task<FeaturedPromoItem?> LoadAsync(
+        IDbConnection conn, IDbTransaction? tx, int pkid, CancellationToken ct)
+        => conn.QueryFirstOrDefaultAsync<FeaturedPromoItem>(new CommandDefinition(
+            $"{SelectList} WHERE f.pkid = @Pkid", new { Pkid = pkid }, tx, cancellationToken: ct));
+
+    /// <summary>Loads a row that must exist because the caller just wrote or located it in this transaction.</summary>
+    private static async Task<FeaturedPromoItem> RequireAsync(
+        IDbConnection conn, IDbTransaction tx, int pkid, CancellationToken ct)
+        => await LoadAsync(conn, tx, pkid, ct)
+           ?? throw new InvalidOperationException($"{TableName} {pkid} is missing immediately after being written.");
 
     private static Task SetSlotAsync(
         IDbConnection conn, IDbTransaction tx, int pkid, byte slot, CancellationToken ct) =>

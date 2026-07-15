@@ -16,6 +16,7 @@ import { ConfirmationService } from 'primeng/api';
 import { AppUserService } from '../../../core/services/app-user.service';
 import { AuthService } from '../../../core/services/auth.service';
 import { AppUserRequest, LookupItem } from '../../../core/models/app-user.model';
+import { RowAuditBadge } from '../../../core/components/row-audit-badge/row-audit-badge';
 
 @Component({
   selector: 'app-app-user-form',
@@ -29,6 +30,7 @@ import { AppUserRequest, LookupItem } from '../../../core/models/app-user.model'
     MultiSelectModule,
     ToastModule,
     ConfirmDialogModule,
+    RowAuditBadge,
   ],
   providers: [MessageService, ConfirmationService],
   templateUrl: './app-user-form.html',
@@ -57,6 +59,12 @@ export class AppUserForm implements OnInit {
 
   private editUserId: string | null = null;
 
+  /**
+   * The audit badge's record — null while adding. The trail is keyed by the numeric pkid column,
+   * not UserId, so this is only known once the user has loaded.
+   */
+  readonly auditPkid = signal<number | null>(null);
+
   readonly form = this.fb.nonNullable.group({
     userId: ['', Validators.required],
     userName: ['', Validators.required],
@@ -77,6 +85,7 @@ export class AppUserForm implements OnInit {
       next: ({ roles, user }) => {
         this.roles.set(roles);
         if (user) {
+          this.auditPkid.set(user.pkid);
           this.form.patchValue({
             userId: user.userId,
             userName: user.userName,

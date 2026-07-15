@@ -5,11 +5,12 @@ import { ButtonModule } from 'primeng/button';
 
 import { PartnerService } from '../../../core/services/partner.service';
 import { Partner } from '../../../core/models/partner.model';
+import { RowAuditBadge } from '../../../core/components/row-audit-badge/row-audit-badge';
 
 @Component({
   selector: 'app-partner-detail',
   standalone: true,
-  imports: [CommonModule, ButtonModule],
+  imports: [CommonModule, ButtonModule, RowAuditBadge],
   templateUrl: './partner-detail.html',
   styleUrl: './partner-detail.scss',
 })

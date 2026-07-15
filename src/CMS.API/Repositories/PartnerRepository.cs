@@ -1,3 +1,5 @@
+using System.Data;
+using CMS.API.Auditing;
 using CMS.API.Data;
 using CMS.API.Models;
 using Dapper;
@@ -6,9 +8,16 @@ namespace CMS.API.Repositories;
 
 public class PartnerRepository : IPartnerRepository
 {
-    private readonly IDbConnectionFactory _factory;
+    private const string TableName = "Partner";
 
-    public PartnerRepository(IDbConnectionFactory factory) => _factory = factory;
+    private readonly IDbConnectionFactory _factory;
+    private readonly IRowAuditWriter _audit;
+
+    public PartnerRepository(IDbConnectionFactory factory, IRowAuditWriter audit)
+    {
+        _factory = factory;
+        _audit = audit;
+    }
 
     // Shared SELECT for list/view. No JOINs (no FKs), no RTRIM (no nchar columns).
     private const string SelectList = @"
@@ -56,16 +65,16 @@ ORDER BY p.DisplayOrder ASC";
     public async Task<Partner?> GetByIdAsync(short pkid, CancellationToken ct = default)
     {
         using var conn = await _factory.CreateOpenConnectionAsync(ct);
-        return await conn.QueryFirstOrDefaultAsync<Partner>(new CommandDefinition(
-            $"{SelectList} WHERE p.pkid = @Pkid", new { Pkid = pkid }, cancellationToken: ct));
+        return await LoadAsync(conn, null, pkid, ct);
     }
 
     public async Task<short> CreateAsync(PartnerRequest request, CancellationToken ct = default)
     {
         using var conn = await _factory.CreateOpenConnectionAsync(ct);
+        using var tx = conn.BeginTransaction();
 
         // pkid is IDENTITY — omit from the column list; return the DB-assigned value.
-        return await conn.ExecuteScalarAsync<short>(new CommandDefinition(@"
+        var newId = await conn.ExecuteScalarAsync<short>(new CommandDefinition(@"
 INSERT INTO Partner (Name, AppKey, NameOnPartnerMenu, NameOnCourseDetailPage, DisplayOrder, ImageFilename)
 VALUES (@Name, @AppKey, @NameOnPartnerMenu, @NameOnCourseDetailPage, @DisplayOrder, @ImageFilename);
 SELECT CAST(SCOPE_IDENTITY() AS smallint);",
@@ -78,12 +87,26 @@ SELECT CAST(SCOPE_IDENTITY() AS smallint);",
                 request.DisplayOrder,
                 request.ImageFilename
             },
-            cancellationToken: ct));
+            tx, cancellationToken: ct));
+
+        await _audit.LogInsertAsync(conn, tx, TableName, await RequireAsync(conn, tx, newId, ct), ct);
+
+        tx.Commit();
+        return newId;
     }
 
     public async Task<bool> UpdateAsync(PartnerRequest request, CancellationToken ct = default)
     {
         using var conn = await _factory.CreateOpenConnectionAsync(ct);
+        using var tx = conn.BeginTransaction();
+
+        // Read the "before" inside the transaction so the audited change list is accurate.
+        var before = await LoadAsync(conn, tx, request.Pkid, ct);
+        if (before is null)
+        {
+            tx.Rollback();
+            return false;
+        }
 
         var affected = await conn.ExecuteAsync(new CommandDefinition(@"
 UPDATE Partner
@@ -104,17 +127,52 @@ WHERE pkid = @Pkid;",
                 request.DisplayOrder,
                 request.ImageFilename
             },
-            cancellationToken: ct));
+            tx, cancellationToken: ct));
 
-        return affected > 0;
+        if (affected == 0)
+        {
+            tx.Rollback();
+            return false;
+        }
+
+        await _audit.LogUpdateAsync(
+            conn, tx, TableName, before, await RequireAsync(conn, tx, request.Pkid, ct), ct);
+
+        tx.Commit();
+        return true;
     }
 
     public async Task<bool> DeleteAsync(short pkid, CancellationToken ct = default)
     {
         using var conn = await _factory.CreateOpenConnectionAsync(ct);
-        var affected = await conn.ExecuteAsync(new CommandDefinition(
+        using var tx = conn.BeginTransaction();
+
+        // Read the row before deleting it — afterwards its first string column is gone.
+        var row = await LoadAsync(conn, tx, pkid, ct);
+        if (row is null)
+        {
+            tx.Rollback();
+            return false;
+        }
+
+        await conn.ExecuteAsync(new CommandDefinition(
             "DELETE FROM Partner WHERE pkid = @Pkid",
-            new { Pkid = pkid }, cancellationToken: ct));
-        return affected > 0;
+            new { Pkid = pkid }, tx, cancellationToken: ct));
+
+        await _audit.LogDeleteAsync(conn, tx, TableName, row, ct);
+
+        tx.Commit();
+        return true;
     }
+
+    private static Task<Partner?> LoadAsync(
+        IDbConnection conn, IDbTransaction? tx, short pkid, CancellationToken ct)
+        => conn.QueryFirstOrDefaultAsync<Partner>(new CommandDefinition(
+            $"{SelectList} WHERE p.pkid = @Pkid", new { Pkid = pkid }, tx, cancellationToken: ct));
+
+    /// <summary>Loads a row that must exist because the caller just wrote it inside this transaction.</summary>
+    private static async Task<Partner> RequireAsync(
+        IDbConnection conn, IDbTransaction tx, short pkid, CancellationToken ct)
+        => await LoadAsync(conn, tx, pkid, ct)
+           ?? throw new InvalidOperationException($"{TableName} {pkid} is missing immediately after being written.");
 }
