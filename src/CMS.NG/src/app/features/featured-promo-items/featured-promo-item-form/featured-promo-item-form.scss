@@ -1,0 +1,53 @@
+:host {
+  display: block;
+}
+
+// Boxed inline editor, matching the mockup: the form replaces the row it edits.
+.inline-form {
+  border: 2px solid var(--p-content-border-color, #333);
+  border-radius: 4px;
+  padding: 0.75rem 1rem;
+  margin: 0.25rem 0;
+  background: var(--p-content-background, #fff);
+}
+
+.field {
+  display: flex;
+  align-items: center;
+  gap: 0.5rem;
+  margin-bottom: 0.4rem;
+
+  label {
+    flex: 0 0 6.5rem;
+    font-weight: 600;
+    color: var(--p-text-color);
+  }
+
+  input[pInputText] {
+    flex: 1 1 auto;
+  }
+}
+
+// The autocomplete wrapper must stretch like the plain inputs next to it.
+:host ::ng-deep .promo-code-input,
+:host ::ng-deep .promo-code-input input {
+  width: 100%;
+}
+
+.field:has(.promo-code-input) {
+  ::ng-deep p-autocomplete {
+    flex: 1 1 auto;
+  }
+}
+
+.form-error {
+  margin: 0.25rem 0 0.5rem 7rem;
+  color: var(--p-red-500, #d32f2f);
+  font-size: 0.85rem;
+}
+
+.form-actions {
+  display: flex;
+  gap: 2rem;
+  padding-left: 7rem;
+}

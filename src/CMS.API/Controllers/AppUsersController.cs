@@ -1,5 +1,7 @@
 using CMS.API.Models;
 using CMS.API.Repositories;
+using CMS.API.Security;
+using Microsoft.AspNetCore.Authorization;
 using Microsoft.AspNetCore.Mvc;
 
 namespace CMS.API.Controllers;
@@ -70,7 +72,11 @@ public class AppUsersController : ControllerBase
         return deleted ? NoContent() : NotFound();
     }
 
-    /// <summary>Reset the user's password to the configured default.</summary>
+    /// <summary>Reset the user's password to the configured default. Admin only.</summary>
+    // Resetting another account's password is a takeover primitive, so the role is enforced here
+    // rather than only hidden in the UI. Roles come from the caller's JWT role claims; this is the
+    // one endpoint that needs more than the global AuthorizeFilter's "any authenticated user".
+    [Authorize(Roles = AppRoles.Admin)]
     [HttpPost("{id}/reset-password")]
     public async Task<IActionResult> ResetPassword(string id, CancellationToken ct)
     {

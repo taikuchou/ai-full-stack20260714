@@ -56,25 +56,183 @@
       </tr>
     </ng-template>
 
+    <!--
+      Cells open on (dblclick) and save on the editor's blur. PrimeNG's `pEditableColumn`
+      opens on single click with no way to require a double, so the editing state is held by
+      the component instead — see CourseList.startEdit / commit.
+    -->
     <ng-template pTemplate="body" let-course>
       <tr>
-        <td>{{ course.pkid }}</td>
-        <td>{{ course.displayOrder }}</td>
-        <td>{{ course.courseId }}</td>
-        <td>{{ course.prodCourseId }}</td>
-        <td class="key-col">{{ course.title }}</td>
-        <td>{{ course.partnerName || '—' }}</td>
-        <td>{{ course.courseGroupDescription || '—' }}</td>
-        <td>{{ course.publishStatusDescription || '—' }}</td>
-        <td>{{ course.scheduleOn | date: 'yyyy/MM/dd' }}</td>
-        <td>{{ course.scheduleOff | date: 'yyyy/MM/dd' }}</td>
-        <td class="text-right">{{ course.hour }}</td>
-        <td class="text-right">{{ course.listPrice | number }}</td>
-        <td class="text-right">{{ course.learningCredit }}</td>
-        <td class="text-center">
-          <p-tag
-            [value]="course.canRepeat ? '是' : '否'"
-            [severity]="course.canRepeat ? 'success' : 'secondary'" />
+        <td class="readonly-cell">{{ course.pkid }}</td>
+
+        <td class="text-right editable-cell" (dblclick)="startEdit(course, 'displayOrder')">
+          @if (isEditing(course, 'displayOrder')) {
+            <div class="cell-editor" #cellEditor>
+              <p-inputNumber
+                [(ngModel)]="editValue"
+                [showButtons]="false"
+                (onBlur)="commit(course)" />
+              @if (editError()) {
+                <small class="cell-error">{{ editError() }}</small>
+              }
+            </div>
+          } @else {
+            {{ course.displayOrder }}
+          }
+        </td>
+
+        <td class="editable-cell" (dblclick)="startEdit(course, 'courseId')">
+          @if (isEditing(course, 'courseId')) {
+            <div class="cell-editor" #cellEditor>
+              <input pInputText type="text" [(ngModel)]="editValue" (blur)="commit(course)" />
+              @if (editError()) {
+                <small class="cell-error">{{ editError() }}</small>
+              }
+            </div>
+          } @else {
+            {{ course.courseId }}
+          }
+        </td>
+
+        <td class="editable-cell" (dblclick)="startEdit(course, 'prodCourseId')">
+          @if (isEditing(course, 'prodCourseId')) {
+            <div class="cell-editor" #cellEditor>
+              <input pInputText type="text" [(ngModel)]="editValue" (blur)="commit(course)" />
+              @if (editError()) {
+                <small class="cell-error">{{ editError() }}</small>
+              }
+            </div>
+          } @else {
+            {{ course.prodCourseId }}
+          }
+        </td>
+
+        <td class="key-col editable-cell" (dblclick)="startEdit(course, 'title')">
+          @if (isEditing(course, 'title')) {
+            <div class="cell-editor" #cellEditor>
+              <input pInputText type="text" [(ngModel)]="editValue" (blur)="commit(course)" />
+              @if (editError()) {
+                <small class="cell-error">{{ editError() }}</small>
+              }
+            </div>
+          } @else {
+            {{ course.title }}
+          }
+        </td>
+
+        <!-- 原廠 / 課程群組: FK labels resolved server-side — read-only. -->
+        <td class="readonly-cell">{{ course.partnerName || '—' }}</td>
+        <td class="readonly-cell">{{ course.courseGroupDescription || '—' }}</td>
+
+        <td class="editable-cell" (dblclick)="startEdit(course, 'publishStatus_pkid')">
+          @if (isEditing(course, 'publishStatus_pkid')) {
+            <div class="cell-editor" #cellEditor>
+              <p-select
+                [options]="publishStatuses()"
+                [(ngModel)]="editValue"
+                optionLabel="label"
+                optionValue="value"
+                placeholder="請選擇"
+                appendTo="body"
+                (onBlur)="commit(course)" />
+              @if (editError()) {
+                <small class="cell-error">{{ editError() }}</small>
+              }
+            </div>
+          } @else {
+            {{ course.publishStatusDescription || '—' }}
+          }
+        </td>
+
+        <td class="editable-cell" (dblclick)="startEdit(course, 'scheduleOn')">
+          @if (isEditing(course, 'scheduleOn')) {
+            <div class="cell-editor" #cellEditor>
+              <p-datepicker
+                [(ngModel)]="editValue"
+                dateFormat="yy/mm/dd"
+                appendTo="body"
+                (onShow)="onDatePanelShow()"
+                (onClose)="onDatePanelHide()"
+                (onSelect)="commit(course)"
+                (onBlur)="commitFromDate(course)" />
+              @if (editError()) {
+                <small class="cell-error">{{ editError() }}</small>
+              }
+            </div>
+          } @else {
+            {{ course.scheduleOn | date: 'yyyy/MM/dd' }}
+          }
+        </td>
+
+        <td class="editable-cell" (dblclick)="startEdit(course, 'scheduleOff')">
+          @if (isEditing(course, 'scheduleOff')) {
+            <div class="cell-editor" #cellEditor>
+              <p-datepicker
+                [(ngModel)]="editValue"
+                dateFormat="yy/mm/dd"
+                appendTo="body"
+                (onShow)="onDatePanelShow()"
+                (onClose)="onDatePanelHide()"
+                (onSelect)="commit(course)"
+                (onBlur)="commitFromDate(course)" />
+              @if (editError()) {
+                <small class="cell-error">{{ editError() }}</small>
+              }
+            </div>
+          } @else {
+            {{ course.scheduleOff | date: 'yyyy/MM/dd' }}
+          }
+        </td>
+
+        <td class="text-right editable-cell" (dblclick)="startEdit(course, 'hour')">
+          @if (isEditing(course, 'hour')) {
+            <div class="cell-editor" #cellEditor>
+              <p-inputNumber [(ngModel)]="editValue" [showButtons]="false" (onBlur)="commit(course)" />
+              @if (editError()) {
+                <small class="cell-error">{{ editError() }}</small>
+              }
+            </div>
+          } @else {
+            {{ course.hour }}
+          }
+        </td>
+
+        <td class="text-right editable-cell" (dblclick)="startEdit(course, 'listPrice')">
+          @if (isEditing(course, 'listPrice')) {
+            <div class="cell-editor" #cellEditor>
+              <p-inputNumber [(ngModel)]="editValue" [showButtons]="false" (onBlur)="commit(course)" />
+              @if (editError()) {
+                <small class="cell-error">{{ editError() }}</small>
+              }
+            </div>
+          } @else {
+            {{ course.listPrice | number }}
+          }
+        </td>
+
+        <td class="text-right editable-cell" (dblclick)="startEdit(course, 'learningCredit')">
+          @if (isEditing(course, 'learningCredit')) {
+            <div class="cell-editor" #cellEditor>
+              <p-inputNumber [(ngModel)]="editValue" [showButtons]="false" (onBlur)="commit(course)" />
+              @if (editError()) {
+                <small class="cell-error">{{ editError() }}</small>
+              }
+            </div>
+          } @else {
+            {{ course.learningCredit }}
+          }
+        </td>
+
+        <td class="text-center editable-cell" (dblclick)="startEdit(course, 'canRepeat')">
+          @if (isEditing(course, 'canRepeat')) {
+            <div class="cell-editor" #cellEditor>
+              <p-checkbox [(ngModel)]="editValue" [binary]="true" (onBlur)="commit(course)" />
+            </div>
+          } @else {
+            <p-tag
+              [value]="course.canRepeat ? '是' : '否'"
+              [severity]="course.canRepeat ? 'success' : 'secondary'" />
+          }
         </td>
         <td class="text-center actions">
           <p-button

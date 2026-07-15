@@ -13,28 +13,51 @@
 } @else if (course(); as c) {
   <div class="detail-card">
     <h2>基本資料</h2>
-    <dl class="detail-grid">
-      <dt>主代碼</dt>
-      <dd>{{ c.pkid }}</dd>
+    <div class="basic-layout">
+      <dl class="detail-grid">
+        <dt>主代碼</dt>
+        <dd>{{ c.pkid }}</dd>
 
-      <dt>顯示順序</dt>
-      <dd>{{ c.displayOrder }}</dd>
+        <dt>顯示順序</dt>
+        <dd>{{ c.displayOrder }}</dd>
 
-      <dt>課程名稱</dt>
-      <dd>{{ c.title }}</dd>
+        <dt>課程名稱</dt>
+        <dd>{{ c.title }}</dd>
 
-      <dt>正式名稱</dt>
-      <dd>{{ c.officialTitle || '—' }}</dd>
+        <dt>正式名稱</dt>
+        <dd>{{ c.officialTitle || '—' }}</dd>
 
-      <dt>簡介代碼</dt>
-      <dd>{{ c.courseId }}</dd>
+        <dt>簡介代碼</dt>
+        <dd>{{ c.courseId }}</dd>
 
-      <dt>科目代碼</dt>
-      <dd>{{ c.prodCourseId }}</dd>
+        <dt>科目代碼</dt>
+        <dd>{{ c.prodCourseId }}</dd>
 
-      <dt>網址代稱</dt>
-      <dd>{{ c.friendlyUrl }}</dd>
-    </dl>
+        <dt>網址代稱</dt>
+        <dd>{{ c.friendlyUrl }}</dd>
+      </dl>
+
+      <div class="qr-panel">
+        <qrcode
+          [qrdata]="qrUrl()"
+          [width]="180"
+          [margin]="1"
+          errorCorrectionLevel="M"
+          elementType="canvas"
+          [alt]="'課程 QR Code：' + c.courseId"
+        />
+        <p class="qr-title">{{ c.courseId }}</p>
+        <a class="qr-url" [href]="qrUrl()" target="_blank" rel="noopener">{{ qrUrl() }}</a>
+        <p-button
+          label="下載 QR Code"
+          icon="pi pi-download"
+          severity="secondary"
+          [outlined]="true"
+          size="small"
+          (onClick)="downloadQrCode()"
+        />
+      </div>
+    </div>
   </div>
 
   <div class="detail-card">

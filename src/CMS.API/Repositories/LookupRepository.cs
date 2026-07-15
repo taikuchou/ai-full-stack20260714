@@ -100,4 +100,46 @@ ORDER BY Description ASC";
         using var conn = await _factory.CreateOpenConnectionAsync(ct);
         return await conn.QueryAsync<LookupItem>(new CommandDefinition(sql, cancellationToken: ct));
     }
+
+    public async Task<IEnumerable<LookupItem>> GetTrainingCentersAsync(CancellationToken ct = default)
+    {
+        // Id is the smallint pkid rendered as text so the LookupItem.Id (string) contract holds.
+        // DisplayOrder drives the left-to-right tab order on the FeaturedPromoItem grid.
+        const string sql = @"
+SELECT CAST(pkid AS varchar(6)) AS Id,
+       Name                     AS Label
+FROM TrainingCenter
+ORDER BY DisplayOrder ASC";
+
+        using var conn = await _factory.CreateOpenConnectionAsync(ct);
+        return await conn.QueryAsync<LookupItem>(new CommandDefinition(sql, cancellationToken: ct));
+    }
+
+    public async Task<IEnumerable<LookupItem>> GetPromoCodesAsync(CancellationToken ct = default)
+    {
+        // Id is the int pkid rendered as text so the LookupItem.Id (string) contract holds.
+        const string sql = @"
+SELECT CAST(pkid AS varchar(10)) AS Id,
+       PromoCode                 AS Label
+FROM Promotion2
+ORDER BY PromoCode ASC";
+
+        using var conn = await _factory.CreateOpenConnectionAsync(ct);
+        return await conn.QueryAsync<LookupItem>(new CommandDefinition(sql, cancellationToken: ct));
+    }
+
+    public async Task<PromoCodeLookup?> GetPromoCodeAsync(string promoCode, CancellationToken ct = default)
+    {
+        const string sql = @"
+SELECT pkid        AS Pkid,
+       PromoCode   AS PromoCode,
+       Topic       AS Topic,
+       Description AS Description
+FROM Promotion2
+WHERE PromoCode = @PromoCode";
+
+        using var conn = await _factory.CreateOpenConnectionAsync(ct);
+        return await conn.QueryFirstOrDefaultAsync<PromoCodeLookup>(
+            new CommandDefinition(sql, new { PromoCode = promoCode }, cancellationToken: ct));
+    }
 }

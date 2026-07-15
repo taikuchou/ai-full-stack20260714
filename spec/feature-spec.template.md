@@ -164,8 +164,6 @@ For any special endpoints (copy, swap, etc.):
 - Response shape
 - Error conditions (409, 404, etc.)
 
-Auth exceptions: note if any endpoint requires `[Authorize(Roles="Admin")]` or `[AllowAnonymous]`.
-
 ---
 
 ## Backend Notes

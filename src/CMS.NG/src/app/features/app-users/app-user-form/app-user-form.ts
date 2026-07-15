@@ -1,4 +1,4 @@
-import { Component, OnInit, inject, signal } from '@angular/core';
+import { Component, OnInit, computed, inject, signal } from '@angular/core';
 import { CommonModule } from '@angular/common';
 import { FormBuilder, ReactiveFormsModule, Validators } from '@angular/forms';
 import { ActivatedRoute, Router } from '@angular/router';
@@ -10,7 +10,11 @@ import { MultiSelectModule } from 'primeng/multiselect';
 import { ToastModule } from 'primeng/toast';
 import { MessageService } from 'primeng/api';
 
+import { ConfirmDialogModule } from 'primeng/confirmdialog';
+import { ConfirmationService } from 'primeng/api';
+
 import { AppUserService } from '../../../core/services/app-user.service';
+import { AuthService } from '../../../core/services/auth.service';
 import { AppUserRequest, LookupItem } from '../../../core/models/app-user.model';
 
 @Component({
@@ -24,8 +28,9 @@ import { AppUserRequest, LookupItem } from '../../../core/models/app-user.model'
     ToggleSwitchModule,
     MultiSelectModule,
     ToastModule,
+    ConfirmDialogModule,
   ],
-  providers: [MessageService],
+  providers: [MessageService, ConfirmationService],
   templateUrl: './app-user-form.html',
   styleUrl: './app-user-form.scss',
 })
@@ -35,11 +40,20 @@ export class AppUserForm implements OnInit {
   private readonly route = inject(ActivatedRoute);
   private readonly router = inject(Router);
   private readonly messageService = inject(MessageService);
+  private readonly confirmationService = inject(ConfirmationService);
+  private readonly authService = inject(AuthService);
 
   readonly isEdit = signal(false);
   readonly loading = signal(true);
   readonly saving = signal(false);
+  readonly resetting = signal(false);
   readonly roles = signal<LookupItem[]>([]);
+
+  /**
+   * Gates the reset button. Convenience only — the API enforces the Admin role itself, so hiding
+   * this is not what makes the action safe.
+   */
+  readonly isAdmin = computed(() => this.authService.hasRole('Admin'));
 
   private editUserId: string | null = null;
 
@@ -118,6 +132,45 @@ export class AppUserForm implements OnInit {
             ? `使用者代碼「${request.userId}」已存在。`
             : '儲存時發生錯誤。';
         this.messageService.add({ severity: 'error', summary: '儲存失敗', detail });
+      },
+    });
+  }
+
+  confirmResetPassword(): void {
+    const userId = this.editUserId;
+    if (!userId) return;
+
+    this.confirmationService.confirm({
+      header: '重設密碼',
+      message: `確定要將使用者「${userId}」的密碼重設為系統預設密碼？`,
+      icon: 'pi pi-exclamation-triangle',
+      acceptLabel: '重設',
+      rejectLabel: '取消',
+      accept: () => this.resetPassword(userId),
+    });
+  }
+
+  private resetPassword(userId: string): void {
+    // Only the UserId goes out; the default password is read server-side from SysConfig and no
+    // password or hash comes back.
+    this.resetting.set(true);
+    this.service.resetPassword(userId).subscribe({
+      next: () => {
+        this.resetting.set(false);
+        this.messageService.add({
+          severity: 'success',
+          summary: '重設成功',
+          detail: `使用者「${userId}」的密碼已重設為預設密碼。`,
+        });
+      },
+      error: (err) => {
+        this.resetting.set(false);
+        this.messageService.add({
+          severity: 'error',
+          summary: '重設失敗',
+          // 403 means the API refused the role — reachable if the token's roles changed since load.
+          detail: err?.status === 403 ? '需要 Admin 權限才能重設密碼。' : '重設密碼時發生錯誤。',
+        });
       },
     });
   }

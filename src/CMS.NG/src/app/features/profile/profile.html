@@ -1,0 +1,112 @@
+<p-toast />
+
+<div class="page-header">
+  <div class="page-title">
+    <h1>個人資料 My Profile</h1>
+  </div>
+</div>
+
+<form class="detail-card" [formGroup]="form" (ngSubmit)="submit()">
+  <h2>帳號資料</h2>
+
+  <dl class="detail-grid">
+    <dt>帳號 UserId</dt>
+    <dd class="readonly" data-testid="profile-user-id">{{ userId() }}</dd>
+
+    <dt>角色 Roles</dt>
+    <dd class="readonly" data-testid="profile-roles">
+      @if (roles().length) {
+        <span class="chips">
+          @for (role of roles(); track role) {
+            <p-tag [value]="role" severity="info" />
+          }
+        </span>
+      } @else {
+        <span class="muted">尚未指派角色</span>
+      }
+    </dd>
+  </dl>
+
+  <div class="field">
+    <label for="userName">姓名 UserName <span class="req">*</span></label>
+    <input
+      id="userName"
+      pInputText
+      type="text"
+      formControlName="userName"
+      placeholder="請輸入姓名"
+      [class.ng-invalid-visual]="invalid('userName')"
+    />
+    @if (invalid('userName')) {
+      <small class="err">姓名為必填。</small>
+    }
+  </div>
+
+  <div class="form-actions">
+    <p-button type="submit" label="儲存" icon="pi pi-check" [loading]="submitting()" />
+  </div>
+</form>
+
+<form class="detail-card" [formGroup]="passwordForm" (ngSubmit)="submitPassword()">
+  <h2>變更密碼 Change Password</h2>
+
+  <div class="field">
+    <label for="currentPassword">目前密碼 Current password <span class="req">*</span></label>
+    <p-password
+      inputId="currentPassword"
+      formControlName="currentPassword"
+      autocomplete="current-password"
+      [feedback]="false"
+      [toggleMask]="true"
+      styleClass="w-full"
+    />
+    @if (invalidPassword('currentPassword')) {
+      <small class="err" data-testid="current-password-error">目前密碼為必填。</small>
+    }
+  </div>
+
+  <div class="field">
+    <label for="newPassword">新密碼 New password <span class="req">*</span></label>
+    <p-password
+      inputId="newPassword"
+      formControlName="newPassword"
+      autocomplete="new-password"
+      [feedback]="false"
+      [toggleMask]="true"
+      styleClass="w-full"
+    />
+    <small class="hint">{{ complexityMessage }}</small>
+    @if (complexityFailed()) {
+      <small class="err" data-testid="complexity-error">{{ complexityMessage }}</small>
+    } @else if (invalidPassword('newPassword')) {
+      <small class="err">新密碼為必填。</small>
+    }
+  </div>
+
+  <div class="field">
+    <label for="confirmNewPassword">確認新密碼 Confirm new password <span class="req">*</span></label>
+    <p-password
+      inputId="confirmNewPassword"
+      formControlName="confirmNewPassword"
+      autocomplete="new-password"
+      [feedback]="false"
+      [toggleMask]="true"
+      styleClass="w-full"
+    />
+    @if (mismatch()) {
+      <small class="err" data-testid="mismatch-error">新密碼與確認密碼不一致。</small>
+    } @else if (invalidPassword('confirmNewPassword')) {
+      <small class="err">確認新密碼為必填。</small>
+    }
+  </div>
+
+  <div class="form-actions">
+    <p-button
+      type="submit"
+      label="變更密碼"
+      icon="pi pi-lock"
+      [loading]="changingPassword()"
+      data-testid="change-password-submit"
+    />
+  </div>
+</form>

@@ -1,9 +1,8 @@
 using System.Data;
-using System.Security.Cryptography;
-using System.Text;
 using System.Text.Json;
 using CMS.API.Data;
 using CMS.API.Models;
+using CMS.API.Security;
 using Dapper;
 
 namespace CMS.API.Repositories;
@@ -83,7 +82,7 @@ SELECT ur.RoleId FROM AppUserRole ur WHERE ur.UserId = @UserId ORDER BY ur.RoleI
         using var conn = await _factory.CreateOpenConnectionAsync(ct);
 
         // New accounts start with the configured default password (SHA-256 hashed).
-        var passwordHash = HashPassword(await GetDefaultPasswordAsync(conn, null, ct));
+        var passwordHash = PasswordHasher.Hash(await GetDefaultPasswordAsync(conn, null, ct));
 
         using var tx = conn.BeginTransaction();
 
@@ -147,7 +146,7 @@ WHERE UserId = @UserId;",
     {
         using var conn = await _factory.CreateOpenConnectionAsync(ct);
 
-        var passwordHash = HashPassword(await GetDefaultPasswordAsync(conn, null, ct));
+        var passwordHash = PasswordHasher.Hash(await GetDefaultPasswordAsync(conn, null, ct));
 
         var affected = await conn.ExecuteAsync(new CommandDefinition(@"
 UPDATE AppUser
@@ -202,8 +201,4 @@ WHERE UserId = @UserId;",
 
         return prop.GetString()!;
     }
-
-    // SHA-256, stored as uppercase hex.
-    private static string HashPassword(string plain)
-        => Convert.ToHexString(SHA256.HashData(Encoding.UTF8.GetBytes(plain)));
 }

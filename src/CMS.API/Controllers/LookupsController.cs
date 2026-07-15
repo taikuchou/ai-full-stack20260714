@@ -46,4 +46,25 @@ public class LookupsController : ControllerBase
     [HttpGet("job-categories")]
     public async Task<ActionResult<IEnumerable<LookupItem>>> GetJobCategories(CancellationToken ct)
         => Ok(await _repository.GetJobCategoriesAsync(ct));
+
+    /// <summary>TrainingCenter options for the FeaturedPromoItem grid tabs.</summary>
+    [HttpGet("training-centers")]
+    public async Task<ActionResult<IEnumerable<LookupItem>>> GetTrainingCenters(CancellationToken ct)
+        => Ok(await _repository.GetTrainingCentersAsync(ct));
+
+    /// <summary>Promotion2 options for the FeaturedPromoItem PromoCode autocomplete.</summary>
+    [HttpGet("promo-codes")]
+    public async Task<ActionResult<IEnumerable<LookupItem>>> GetPromoCodes(CancellationToken ct)
+        => Ok(await _repository.GetPromoCodesAsync(ct));
+
+    /// <summary>
+    /// Resolves a typed PromoCode to its Promotion2 pkid, so the FeaturedPromoItem form can store
+    /// Promotion_pkid. 404 when the code matches no promo.
+    /// </summary>
+    [HttpGet("promo-codes/{promoCode}")]
+    public async Task<ActionResult<PromoCodeLookup>> GetPromoCode(string promoCode, CancellationToken ct)
+    {
+        var promo = await _repository.GetPromoCodeAsync(promoCode, ct);
+        return promo is null ? NotFound() : Ok(promo);
+    }
 }

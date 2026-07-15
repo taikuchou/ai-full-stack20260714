@@ -1,4 +1,4 @@
-import { Component, OnInit, inject, signal } from '@angular/core';
+import { Component, OnInit, computed, inject, signal } from '@angular/core';
 import { CommonModule } from '@angular/common';
 import { ActivatedRoute, Router } from '@angular/router';
 import { forkJoin } from 'rxjs';
@@ -11,6 +11,7 @@ import { ConfirmDialogModule } from 'primeng/confirmdialog';
 import { ConfirmationService, MessageService } from 'primeng/api';
 
 import { AppUserService } from '../../../core/services/app-user.service';
+import { AuthService } from '../../../core/services/auth.service';
 import { AppUser, LookupItem } from '../../../core/models/app-user.model';
 
 @Component({
@@ -35,10 +36,14 @@ export class AppUserDetail implements OnInit {
   private readonly router = inject(Router);
   private readonly confirmationService = inject(ConfirmationService);
   private readonly messageService = inject(MessageService);
+  private readonly authService = inject(AuthService);
 
   readonly user = signal<AppUser | null>(null);
   readonly roleLabels = signal<string[]>([]);
   readonly loading = signal(true);
+
+  /** Gates the reset button. The API enforces the Admin role itself — this is convenience only. */
+  readonly isAdmin = computed(() => this.authService.hasRole('Admin'));
 
   ngOnInit(): void {
     const userId = this.route.snapshot.paramMap.get('id')!;
