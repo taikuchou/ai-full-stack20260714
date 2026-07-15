@@ -56,8 +56,14 @@ Each row names the PK pattern it exemplifies — copy the closest match when sca
 | Partner | 合作廠商 | `smallint IDENTITY` | 課程管理 › 合作廠商 | [course/Partner.md](spec/course/Partner.md) |
 | CourseGroup | 課程群組 | `smallint IDENTITY` | 課程管理 › 課程群組 | [course/CourseGroup.md](spec/course/CourseGroup.md) |
 | Course | 課程 | `int IDENTITY` | 課程管理 › 課程 | [course/Course.md](spec/course/Course.md) |
+| FeaturedPromoItem | 上稿作業 | `int IDENTITY` | 首頁管理 › 上稿作業 | [custom/FeaturedPromoItem/](spec/custom/FeaturedPromoItem/FeaturedPromoItem.spec.md) |
 
-All six are full CRUD. **Course** is the only FK-bearing entity and the only one with N-N beyond the
-AppRole↔AppUser junction — copy it for anything with foreign keys.
+All seven are full CRUD. **Course** is the reference for foreign keys and N-N (beyond the
+AppRole↔AppUser junction) — copy it for anything with FKs.
+
+**FeaturedPromoItem is a customized CRUD** — its spec's mockups replace the standard list with a
+weekly schedule grid (TrainingCenter tabs × Mon–Sun × slots 1–3), an inline cell form instead of a
+routed form/detail, and a PromoCode→pkid lookup. Do **not** copy it when scaffolding a conventional
+entity; see [docs/features.md](docs/features.md) for what it deviates on and why.
 
 Nav links from a built entity to an unbuilt one are **deferred until the target feature exists**.

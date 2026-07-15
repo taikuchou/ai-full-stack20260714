@@ -37,3 +37,26 @@ npx ng test --watch=false --browsers=ChromeHeadless
 `npm start` in `src/CMS.NG` (→ http://localhost:4200).
 **End-to-end running requires the `CMS` database on `.\SQLEXPRESS`** built from `database/*.sql`;
 builds and unit tests do not.
+
+## Login is disabled locally
+
+Development skips the login screen. Two flags, and **both must agree** — the API rejects every
+request without a token, so turning off only the client's guard leaves the app 401ing on load:
+
+| Side | Flag | File |
+|---|---|---|
+| Angular | `authDisabled: true` | `src/environments/environment.development.ts` |
+| API | `Auth:Disabled: true` | `src/CMS.API/appsettings.Development.json` |
+
+`authGuard` returns true outright, and `Program.cs` skips the global `AuthorizeFilter`; the API logs
+a warning at startup when the flag is on. **To log in again, set both to false.** Production is
+unaffected: `environment.ts` and `appsettings.json` leave the flag off, and `/login` stays routable
+either way.
+
+**Tests pin the flag off themselves** — `AuthorizationIntegrationTests` calls
+`UseSetting("Auth:Disabled", "false")` because `WebApplicationFactory` runs in the *Development*
+environment and would otherwise read the appsettings above and assert nothing. Note `UseSetting`,
+not `ConfigureAppConfiguration`: under the minimal hosting model, top-level statements read
+`builder.Configuration` before `ConfigureAppConfiguration` callbacks apply at `Build()`. The Angular
+specs build against `environment.ts` (the test target has no `fileReplacements`), so the flag is off
+there too and `auth.guard.spec.ts` toggles it explicitly.

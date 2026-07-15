@@ -53,6 +53,37 @@
   white-space: nowrap;
 }
 
+/* Inline editing — dblclick opens .cell-editor in place of the display value. */
+.editable-cell {
+  cursor: cell;
+}
+
+.readonly-cell {
+  color: #64748b;
+}
+
+.cell-editor {
+  display: flex;
+  flex-direction: column;
+  gap: 0.25rem;
+  text-align: left;
+
+  input,
+  ::ng-deep .p-select,
+  ::ng-deep .p-datepicker,
+  ::ng-deep .p-inputnumber,
+  ::ng-deep .p-inputnumber input {
+    width: 100%;
+  }
+
+  .cell-error {
+    color: #dc2626;
+    font-size: 0.75rem;
+    line-height: 1.2;
+    white-space: normal;
+  }
+}
+
 .empty {
   text-align: center;
   color: #94a3b8;

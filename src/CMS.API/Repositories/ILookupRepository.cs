@@ -24,4 +24,21 @@ public interface ILookupRepository
 
     /// <summary>JobCategory options for the Course n-n multiselect. Label = Description, Id = pkid.</summary>
     Task<IEnumerable<LookupItem>> GetJobCategoriesAsync(CancellationToken ct = default);
+
+    /// <summary>
+    /// TrainingCenter options for the FeaturedPromoItem grid tabs. Label = Name, Id = pkid,
+    /// ordered by DisplayOrder.
+    /// </summary>
+    Task<IEnumerable<LookupItem>> GetTrainingCentersAsync(CancellationToken ct = default);
+
+    /// <summary>
+    /// Promotion2 options for the PromoCode autocomplete. Label = PromoCode, Id = pkid.
+    /// </summary>
+    Task<IEnumerable<LookupItem>> GetPromoCodesAsync(CancellationToken ct = default);
+
+    /// <summary>
+    /// Resolves a typed PromoCode to its Promotion2 pkid (plus Topic/Description to seed the form).
+    /// Null when no promo carries that code. The match is exact — PromoCode is uniquely indexed.
+    /// </summary>
+    Task<PromoCodeLookup?> GetPromoCodeAsync(string promoCode, CancellationToken ct = default);
 }
