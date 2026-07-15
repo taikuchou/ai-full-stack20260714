@@ -1,5 +1,6 @@
 using System.Data;
 using System.Text.Json;
+using CMS.API.Auditing;
 using CMS.API.Data;
 using CMS.API.Models;
 using CMS.API.Security;
@@ -9,9 +10,16 @@ namespace CMS.API.Repositories;
 
 public class AppUserRepository : IAppUserRepository
 {
-    private readonly IDbConnectionFactory _factory;
+    private const string TableName = "AppUser";
 
-    public AppUserRepository(IDbConnectionFactory factory) => _factory = factory;
+    private readonly IDbConnectionFactory _factory;
+    private readonly IRowAuditWriter _audit;
+
+    public AppUserRepository(IDbConnectionFactory factory, IRowAuditWriter audit)
+    {
+        _factory = factory;
+        _audit = audit;
+    }
 
     // Shared SELECT for list/view. RoleCount is a correlated subquery over the AppUserRole n-n table.
     // PasswordHash is intentionally never selected — it must not reach the client.
@@ -54,12 +62,22 @@ ORDER BY u.UserId ASC";
 
     public async Task<AppUser?> GetByIdAsync(string userId, CancellationToken ct = default)
     {
+        using var conn = await _factory.CreateOpenConnectionAsync(ct);
+        return await LoadAsync(conn, null, userId, ct);
+    }
+
+    /// <summary>
+    /// Reads a user and their role links. Takes the caller's transaction so audit "before" snapshots
+    /// see the same uncommitted state as the change itself.
+    /// </summary>
+    private static async Task<AppUser?> LoadAsync(
+        IDbConnection conn, IDbTransaction? tx, string userId, CancellationToken ct)
+    {
         var sql = $@"{SelectList} WHERE u.UserId = @UserId;
 SELECT ur.RoleId FROM AppUserRole ur WHERE ur.UserId = @UserId ORDER BY ur.RoleId;";
 
-        using var conn = await _factory.CreateOpenConnectionAsync(ct);
         using var multi = await conn.QueryMultipleAsync(
-            new CommandDefinition(sql, new { UserId = userId }, cancellationToken: ct));
+            new CommandDefinition(sql, new { UserId = userId }, tx, cancellationToken: ct));
 
         var user = await multi.ReadFirstOrDefaultAsync<AppUser>();
         if (user is null) return null;
@@ -67,6 +85,12 @@ SELECT ur.RoleId FROM AppUserRole ur WHERE ur.UserId = @UserId ORDER BY ur.RoleI
         user.RoleIds = (await multi.ReadAsync<string>()).ToList();
         return user;
     }
+
+    /// <summary>Loads a row that must exist because the caller just wrote it inside this transaction.</summary>
+    private static async Task<AppUser> RequireAsync(
+        IDbConnection conn, IDbTransaction tx, string userId, CancellationToken ct)
+        => await LoadAsync(conn, tx, userId, ct)
+           ?? throw new InvalidOperationException($"{TableName} {userId} is missing immediately after being written.");
 
     public async Task<bool> ExistsAsync(string userId, CancellationToken ct = default)
     {
@@ -94,6 +118,8 @@ VALUES (@UserId, @UserName, @IsActive, @PasswordHash, GETUTCDATE());",
 
         await SyncRolesAsync(conn, tx, request.UserId, request.RoleIds, ct);
 
+        await _audit.LogInsertAsync(conn, tx, TableName, await RequireAsync(conn, tx, request.UserId, ct), ct);
+
         tx.Commit();
         return request.UserId;
     }
@@ -102,6 +128,14 @@ VALUES (@UserId, @UserName, @IsActive, @PasswordHash, GETUTCDATE());",
     {
         using var conn = await _factory.CreateOpenConnectionAsync(ct);
         using var tx = conn.BeginTransaction();
+
+        // Read the "before" inside the transaction so the audited change list is accurate.
+        var before = await LoadAsync(conn, tx, request.UserId, ct);
+        if (before is null)
+        {
+            tx.Rollback();
+            return false;
+        }
 
         // Password hash is deliberately excluded here — see ResetPasswordAsync.
         var affected = await conn.ExecuteAsync(new CommandDefinition(@"
@@ -120,6 +154,9 @@ WHERE UserId = @UserId;",
 
         await SyncRolesAsync(conn, tx, request.UserId, request.RoleIds, ct);
 
+        await _audit.LogUpdateAsync(
+            conn, tx, TableName, before, await RequireAsync(conn, tx, request.UserId, ct), ct);
+
         tx.Commit();
         return true;
     }
@@ -129,33 +166,63 @@ WHERE UserId = @UserId;",
         using var conn = await _factory.CreateOpenConnectionAsync(ct);
         using var tx = conn.BeginTransaction();
 
+        // Read the row before deleting it — afterwards its first string column is gone.
+        var row = await LoadAsync(conn, tx, userId, ct);
+        if (row is null)
+        {
+            tx.Rollback();
+            return false;
+        }
+
         // Remove n-n rows first to satisfy the FK_AppUserRole_AppUser constraint.
         await conn.ExecuteAsync(new CommandDefinition(
             "DELETE FROM AppUserRole WHERE UserId = @UserId",
             new { UserId = userId }, tx, cancellationToken: ct));
 
-        var affected = await conn.ExecuteAsync(new CommandDefinition(
+        await conn.ExecuteAsync(new CommandDefinition(
             "DELETE FROM AppUser WHERE UserId = @UserId",
             new { UserId = userId }, tx, cancellationToken: ct));
 
+        await _audit.LogDeleteAsync(conn, tx, TableName, row, ct);
+
         tx.Commit();
-        return affected > 0;
+        return true;
     }
 
     public async Task<bool> ResetPasswordAsync(string userId, CancellationToken ct = default)
     {
         using var conn = await _factory.CreateOpenConnectionAsync(ct);
+        using var tx = conn.BeginTransaction();
 
-        var passwordHash = PasswordHasher.Hash(await GetDefaultPasswordAsync(conn, null, ct));
+        var before = await LoadAsync(conn, tx, userId, ct);
+        if (before is null)
+        {
+            tx.Rollback();
+            return false;
+        }
+
+        var passwordHash = PasswordHasher.Hash(await GetDefaultPasswordAsync(conn, tx, ct));
 
         var affected = await conn.ExecuteAsync(new CommandDefinition(@"
 UPDATE AppUser
 SET PasswordHash = @PasswordHash,
     PasswordUpdatedTime = GETUTCDATE()
 WHERE UserId = @UserId;",
-            new { UserId = userId, PasswordHash = passwordHash }, cancellationToken: ct));
+            new { UserId = userId, PasswordHash = passwordHash }, tx, cancellationToken: ct));
 
-        return affected > 0;
+        if (affected == 0)
+        {
+            tx.Rollback();
+            return false;
+        }
+
+        // An admin resetting someone's password is audit-worthy. PasswordHash is never selected
+        // into the model, so this records the PasswordUpdatedTime change, never the secret.
+        await _audit.LogUpdateAsync(
+            conn, tx, TableName, before, await RequireAsync(conn, tx, userId, ct), ct);
+
+        tx.Commit();
+        return true;
     }
 
     // Delete-then-reinsert the AppUserRole assignments for a user.

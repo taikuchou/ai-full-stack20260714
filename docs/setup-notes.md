@@ -38,6 +38,11 @@ npx ng test --watch=false --browsers=ChromeHeadless
 **End-to-end running requires the `CMS` database on `.\SQLEXPRESS`** built from `database/*.sql`;
 builds and unit tests do not.
 
+The one exception is `PartnerRepositoryAuditTests`, which proves the RowAudit retrofit against a real
+database because Dapper cannot run on a mocked connection. Those tests are `[DatabaseFact]`: they
+**skip themselves** when the database is unreachable, so `dotnet test` stays green without it — but
+they only prove anything where the database exists. If the run reports skips, that is why.
+
 ## Authentication: login enforced
 
 **Login is on and enforced, including locally.** `POST /api/auth/login` issues a 24h JWT; a global
