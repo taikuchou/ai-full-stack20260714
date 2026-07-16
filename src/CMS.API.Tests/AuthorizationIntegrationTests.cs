@@ -33,6 +33,9 @@ public class AuthorizationIntegrationTests : IClassFixture<WebApplicationFactory
     /// <summary>The AppUser repository mock behind <see cref="_factory"/>.</summary>
     private Mock<IAppUserRepository> _appUserRepo = null!;
 
+    /// <summary>The AppRole repository mock behind <see cref="_factory"/>.</summary>
+    private Mock<IAppRoleRepository> _appRoleRepo = null!;
+
     public AuthorizationIntegrationTests(WebApplicationFactory<Program> factory)
     {
         _rawFactory = factory;
@@ -50,6 +53,7 @@ public class AuthorizationIntegrationTests : IClassFixture<WebApplicationFactory
     private WebApplicationFactory<Program> CreateFactory(bool authDisabled)
     {
         var roleRepo = new Mock<IAppRoleRepository>();
+        _appRoleRepo = roleRepo;
         roleRepo.Setup(r => r.GetAllAsync(It.IsAny<CancellationToken>()))
             .ReturnsAsync(Array.Empty<AppRole>());
 
@@ -364,5 +368,119 @@ public class AuthorizationIntegrationTests : IClassFixture<WebApplicationFactory
         Assert.Equal(HttpStatusCode.BadRequest, response.StatusCode);
         _authRepo.Verify(r => r.UpdateUserNameAsync(
             It.IsAny<string>(), It.IsAny<string>(), It.IsAny<CancellationToken>()), Times.Never);
+    }
+
+    // ---- AppUser / AppRole management is Admin-only (privilege-escalation guard) ----
+    //
+    // Create/Update on AppUsers write RoleIds via AppUserRole, so an ungated caller could grant
+    // themselves Admin and re-login with it. These prove the mutating actions are Admin-gated while
+    // reads stay open to any authenticated user.
+
+    /// <summary>The headline escalation: a non-Admin editing their own row to add the Admin role is refused.</summary>
+    [Fact]
+    public async Task UpdateAppUser_AsNonAdmin_ReturnsForbiddenAndWritesNothing()
+    {
+        var client = CreateClientSignedInAs("miles", "Miles Sun", "Editor");
+
+        var response = await client.PutAsJsonAsync("/api/appusers", new AppUserRequest
+        {
+            UserId = "miles",
+            UserName = "Miles Sun",
+            RoleIds = new List<string> { "Admin" },
+        });
+
+        Assert.Equal(HttpStatusCode.Forbidden, response.StatusCode);
+        _appUserRepo.Verify(r => r.UpdateAsync(
+            It.IsAny<AppUserRequest>(), It.IsAny<CancellationToken>()), Times.Never);
+    }
+
+    [Fact]
+    public async Task CreateAppUser_AsNonAdmin_ReturnsForbiddenAndWritesNothing()
+    {
+        var client = CreateClientSignedInAs("miles", "Miles Sun", "Editor");
+
+        var response = await client.PostAsJsonAsync("/api/appusers", new AppUserRequest
+        {
+            UserId = "intruder",
+            UserName = "Intruder",
+            RoleIds = new List<string> { "Admin" },
+        });
+
+        Assert.Equal(HttpStatusCode.Forbidden, response.StatusCode);
+        _appUserRepo.Verify(r => r.CreateAsync(
+            It.IsAny<AppUserRequest>(), It.IsAny<CancellationToken>()), Times.Never);
+    }
+
+    [Fact]
+    public async Task DeleteAppUser_AsNonAdmin_ReturnsForbiddenAndWritesNothing()
+    {
+        var client = CreateClientSignedInAs("miles", "Miles Sun", "Editor");
+
+        var response = await client.DeleteAsync("/api/appusers/helen");
+
+        Assert.Equal(HttpStatusCode.Forbidden, response.StatusCode);
+        _appUserRepo.Verify(r => r.DeleteAsync(
+            It.IsAny<string>(), It.IsAny<CancellationToken>()), Times.Never);
+    }
+
+    [Fact]
+    public async Task UpdateAppUser_AsAdmin_IsAllowed()
+    {
+        _appUserRepo.Setup(r => r.UpdateAsync(It.IsAny<AppUserRequest>(), It.IsAny<CancellationToken>()))
+            .ReturnsAsync(true);
+        _appUserRepo.Setup(r => r.GetByIdAsync("miles", It.IsAny<CancellationToken>()))
+            .ReturnsAsync(new AppUser { UserId = "miles", UserName = "Miles Sun" });
+        var client = CreateClientSignedInAs("helen", "Helen Chen", "Admin");
+
+        var response = await client.PutAsJsonAsync("/api/appusers", new AppUserRequest
+        {
+            UserId = "miles",
+            UserName = "Miles Sun",
+        });
+
+        Assert.Equal(HttpStatusCode.OK, response.StatusCode);
+        _appUserRepo.Verify(r => r.UpdateAsync(
+            It.IsAny<AppUserRequest>(), It.IsAny<CancellationToken>()), Times.Once);
+    }
+
+    /// <summary>Reads must stay open to any authenticated user — the gate is on writes only.</summary>
+    [Fact]
+    public async Task GetAppUsers_AsNonAdmin_IsAllowed()
+    {
+        _appUserRepo.Setup(r => r.GetAllAsync(It.IsAny<CancellationToken>()))
+            .ReturnsAsync(Array.Empty<AppUser>());
+        var client = CreateClientSignedInAs("miles", "Miles Sun", "Editor");
+
+        var response = await client.GetAsync("/api/appusers");
+
+        Assert.Equal(HttpStatusCode.OK, response.StatusCode);
+    }
+
+    [Fact]
+    public async Task UpdateAppRole_AsNonAdmin_ReturnsForbiddenAndWritesNothing()
+    {
+        var client = CreateClientSignedInAs("miles", "Miles Sun", "Editor");
+
+        var response = await client.PutAsJsonAsync("/api/approles", new AppRoleRequest
+        {
+            RoleId = "Editor",
+            RoleName = "Editor (tampered)",
+        });
+
+        Assert.Equal(HttpStatusCode.Forbidden, response.StatusCode);
+        _appRoleRepo.Verify(r => r.UpdateAsync(
+            It.IsAny<AppRoleRequest>(), It.IsAny<CancellationToken>()), Times.Never);
+    }
+
+    [Fact]
+    public async Task DeleteAppRole_AsNonAdmin_ReturnsForbiddenAndWritesNothing()
+    {
+        var client = CreateClientSignedInAs("miles", "Miles Sun", "Editor");
+
+        var response = await client.DeleteAsync("/api/approles/Admin");
+
+        Assert.Equal(HttpStatusCode.Forbidden, response.StatusCode);
+        _appRoleRepo.Verify(r => r.DeleteAsync(
+            It.IsAny<string>(), It.IsAny<CancellationToken>()), Times.Never);
     }
 }
