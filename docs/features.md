@@ -77,6 +77,33 @@ renders it. Drop it into a page header's `.page-title` — it needs no per-page 
 A page spec that renders a page containing the badge needs `provideHttpClient()` +
 `provideHttpClientTesting()`, since the badge fetches on init.
 
+**There is no `p-toolbar` in this app** — `.page-header` is it, and `.page-title` is its start
+slot. Ignore `spec/admin/PublishStatus.md:296` ("Sticky `p-toolbar`; `RowAuditBadgeComponent` in
+toolbar `#start`"): that spec is stale, PrimeNG's Toolbar is imported nowhere in `src/CMS.NG`, and
+every real page places the badge directly after the `<h1>` inside `.page-title`.
+
+## Error handling (全域錯誤處理) — cross-cutting, no sidebar entry
+
+The safety net is global and already wired. Wire into it; do not rebuild it per feature.
+
+**Backend — `GlobalExceptionHandler` (`CMS.API/Middleware/`) owns unexpected errors.**
+
+- **No per-controller or per-repository try/catch for unexpected errors.** The handler logs the
+  full detail server-side and returns a generic 500 carrying a `traceId` — never a stack trace,
+  an exception message, or SQL. Catch only to *add meaning*, and then return a deliberate status.
+- **Deliberate responses never reach the handler** and stay exactly as they are: 401/403 from the
+  auth pipeline, validation 400s, 404s. Keep returning them from the controller as today.
+
+**Frontend — errors surface once, globally.**
+
+- `errorInterceptor` toasts 500-class responses, and status 0 (unreachable API), through the root
+  `MessageService` and the shell's `<p-toast />`. Registered in `app.config.ts`.
+- **Don't add per-page handling for server errors.** A page's own `<p-toast />` is for that page's
+  own save/load messages.
+- The shell's `<p-toast />` sits at `app.html:3`, deliberately *outside* the login/shell split, so
+  a failed login request still surfaces.
+- `authInterceptor` owns **401 → clear session → /login**. Pages still handle their own 400/404.
+
 ## Auth (登入 / 個人資料) — not a CRUD feature, no sidebar entry
 
 `POST /api/auth/login` (`AuthController` + `AuthRepository`) takes `{userId, password}` and returns

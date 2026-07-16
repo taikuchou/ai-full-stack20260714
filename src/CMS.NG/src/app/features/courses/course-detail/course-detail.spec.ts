@@ -9,7 +9,9 @@ import { of } from 'rxjs';
 
 import { CourseDetail } from './course-detail';
 import { CourseService } from '../../../core/services/course.service';
+import { PublishStatusService } from '../../../core/services/publish-status.service';
 import { Course, LookupItem } from '../../../core/models/course.model';
+import { PublishStatus } from '../../../core/models/publish-status.model';
 
 const COURSE: Course = {
   pkid: 1,
@@ -48,10 +50,24 @@ const COURSE: Course = {
 const CERTS: LookupItem[] = [{ id: '5', label: 'AZ-900 認證' }];
 const JOBS: LookupItem[] = [{ id: '3', label: '雲端工程師' }];
 
+/**
+ * The three PublishStatus bits are independent (database/course.sql:247-249), so the
+ * fixtures cover published, draft and discontinued separately. COURSE.publishStatus_pkid
+ * is 1 (published).
+ */
+const PUBLISH_STATUSES: PublishStatus[] = [
+  { pkid: 1, description: '上架中', isDraft: false, isPublished: true, isDiscontinued: false },
+  { pkid: 2, description: '草稿', isDraft: true, isPublished: false, isDiscontinued: false },
+  { pkid: 3, description: '下架', isDraft: false, isPublished: false, isDiscontinued: true },
+  // A published-but-discontinued row: the bits are independent, so this must NOT count as live.
+  { pkid: 4, description: '已上架但下架', isDraft: false, isPublished: true, isDiscontinued: true },
+];
+
 describe('CourseDetail', () => {
   let fixture: ComponentFixture<CourseDetail>;
   let component: CourseDetail;
   let serviceSpy: jasmine.SpyObj<CourseService>;
+  let publishStatusSpy: jasmine.SpyObj<PublishStatusService>;
   let router: Router;
 
   beforeEach(async () => {
@@ -64,6 +80,11 @@ describe('CourseDetail', () => {
     serviceSpy.getCertifications.and.returnValue(of(CERTS));
     serviceSpy.getJobCategories.and.returnValue(of(JOBS));
 
+    publishStatusSpy = jasmine.createSpyObj<PublishStatusService>('PublishStatusService', [
+      'getAll',
+    ]);
+    publishStatusSpy.getAll.and.returnValue(of(PUBLISH_STATUSES));
+
     await TestBed.configureTestingModule({
       imports: [CourseDetail],
       providers: [
@@ -72,6 +93,7 @@ describe('CourseDetail', () => {
         provideHttpClientTesting(),
         provideRouter([]),
         { provide: CourseService, useValue: serviceSpy },
+        { provide: PublishStatusService, useValue: publishStatusSpy },
         { provide: ActivatedRoute, useValue: { snapshot: { paramMap: { get: (_: string) => '1' } } } },
       ],
     }).compileComponents();
@@ -90,6 +112,67 @@ describe('CourseDetail', () => {
     expect(component.certificationLabels()).toEqual(['AZ-900 認證']);
     expect(component.jobCategoryLabels()).toEqual(['雲端工程師']);
     expect(component.loading()).toBeFalse();
+  });
+
+  describe('友善列印', () => {
+    /** Rebuild the fixture with the course pointing at a given PublishStatus pkid. */
+    function withStatus(publishStatusPkid: number): ComponentFixture<CourseDetail> {
+      serviceSpy.getById.and.returnValue(of({ ...COURSE, publishStatus_pkid: publishStatusPkid }));
+      const f = TestBed.createComponent(CourseDetail);
+      f.detectChanges();
+      return f;
+    }
+
+    function printButton(f: ComponentFixture<CourseDetail>): HTMLButtonElement {
+      const btn = f.debugElement
+        .queryAll(By.css('.page-actions button'))
+        .find((d) => (d.nativeElement as HTMLElement).textContent?.includes('友善列印'));
+      return btn!.nativeElement as HTMLButtonElement;
+    }
+
+    it('should be enabled for a published course', () => {
+      expect(component.hasPublicPage()).toBeTrue();
+      expect(printButton(fixture).disabled).toBeFalse();
+    });
+
+    it('should be disabled for a draft course (no public page yet)', () => {
+      const f = withStatus(2);
+      expect(f.componentInstance.hasPublicPage()).toBeFalse();
+      expect(printButton(f).disabled).toBeTrue();
+    });
+
+    it('should be disabled for a discontinued course (public page 404s)', () => {
+      const f = withStatus(3);
+      expect(f.componentInstance.hasPublicPage()).toBeFalse();
+      expect(printButton(f).disabled).toBeTrue();
+    });
+
+    it('should be disabled when published AND discontinued — the bits are independent', () => {
+      const f = withStatus(4);
+      expect(f.componentInstance.hasPublicPage()).toBeFalse();
+      expect(printButton(f).disabled).toBeTrue();
+    });
+
+    it('should be disabled when the status pkid resolves to nothing', () => {
+      const f = withStatus(999);
+      expect(f.componentInstance.hasPublicPage()).toBeFalse();
+    });
+
+    it('should open the public course page in a new tab', () => {
+      const open = spyOn(window, 'open');
+      component.openPublicPage();
+      expect(open).toHaveBeenCalledWith(
+        'https://www.uuu.com.tw/Course/Show/1/AZ-900',
+        '_blank',
+        'noopener',
+      );
+    });
+
+    it('should not open anything when the course has no public page', () => {
+      const open = spyOn(window, 'open');
+      withStatus(3).componentInstance.openPublicPage();
+      expect(open).not.toHaveBeenCalled();
+    });
   });
 
   describe('QR code', () => {
@@ -112,6 +195,46 @@ describe('CourseDetail', () => {
     it('should show the courseId as the title under the QR code', () => {
       const title: HTMLElement = fixture.nativeElement.querySelector('.qr-panel .qr-title');
       expect(title.textContent?.trim()).toBe('AZ-900');
+    });
+
+    /**
+     * The QR encodes the public page, which 404s for the 648 of 1084 courses that are not
+     * published. A downloadable QR to a dead page is the failure this gate exists to prevent.
+     */
+    describe('when the course has no public page', () => {
+      let f: ComponentFixture<CourseDetail>;
+
+      beforeEach(() => {
+        serviceSpy.getById.and.returnValue(of({ ...COURSE, publishStatus_pkid: 3 }));
+        f = TestBed.createComponent(CourseDetail);
+        f.detectChanges();
+      });
+
+      it('should not render the QR code at all', () => {
+        expect(f.debugElement.query(By.directive(QRCodeComponent))).toBeNull();
+      });
+
+      it('should not render a link to the dead public page', () => {
+        expect(f.nativeElement.querySelector('.qr-panel .qr-url')).toBeNull();
+      });
+
+      it('should not offer a QR download', () => {
+        const buttons = f.debugElement
+          .queryAll(By.css('.qr-panel button'))
+          .filter((d) => (d.nativeElement as HTMLElement).textContent?.includes('下載 QR Code'));
+        expect(buttons.length).toBe(0);
+      });
+
+      it('should explain why, and still show the courseId', () => {
+        const msg: HTMLElement = f.nativeElement.querySelector('.qr-panel .qr-unavailable');
+        expect(msg.textContent).toContain('課程未上架');
+        const title: HTMLElement = f.nativeElement.querySelector('.qr-panel .qr-title');
+        expect(title.textContent?.trim()).toBe('AZ-900');
+      });
+
+      it('should return null from downloadQrCode() with no canvas to read', () => {
+        expect(f.componentInstance.downloadQrCode()).toBeNull();
+      });
     });
 
     it('downloadQrCode() should produce a PNG image named after the courseId', () => {

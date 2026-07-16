@@ -7,6 +7,18 @@
   </div>
   <div class="page-actions">
     <p-button label="返回" icon="pi pi-arrow-left" severity="secondary" [outlined]="true" (onClick)="back()" />
+    <!-- Opens the public course page, which owns the 友善列印 print output. Disabled when the
+         course is not published, because that page then 404s. -->
+    <p-button
+      label="友善列印"
+      icon="pi pi-print"
+      severity="secondary"
+      [outlined]="true"
+      [disabled]="!hasPublicPage()"
+      [pTooltip]="hasPublicPage() ? '開啟課程公開頁面，使用該頁的「友善列印」' : '課程未上架，尚無公開頁面'"
+      tooltipPosition="bottom"
+      (onClick)="openPublicPage()"
+    />
     <p-button label="編輯" icon="pi pi-pencil" (onClick)="edit()" />
   </div>
 </div>
@@ -40,25 +52,36 @@
         <dd>{{ c.friendlyUrl }}</dd>
       </dl>
 
+      <!-- The QR encodes the public course page, which only exists while the course is
+           published. Rendering it for an unpublished course would produce a scannable,
+           downloadable link to /Error/ResourceNotFound. -->
       <div class="qr-panel">
-        <qrcode
-          [qrdata]="qrUrl()"
-          [width]="180"
-          [margin]="1"
-          errorCorrectionLevel="M"
-          elementType="canvas"
-          [alt]="'課程 QR Code：' + c.courseId"
-        />
-        <p class="qr-title">{{ c.courseId }}</p>
-        <a class="qr-url" [href]="qrUrl()" target="_blank" rel="noopener">{{ qrUrl() }}</a>
-        <p-button
-          label="下載 QR Code"
-          icon="pi pi-download"
-          severity="secondary"
-          [outlined]="true"
-          size="small"
-          (onClick)="downloadQrCode()"
-        />
+        @if (hasPublicPage()) {
+          <qrcode
+            [qrdata]="qrUrl()"
+            [width]="180"
+            [margin]="1"
+            errorCorrectionLevel="M"
+            elementType="canvas"
+            [alt]="'課程 QR Code：' + c.courseId"
+          />
+          <p class="qr-title">{{ c.courseId }}</p>
+          <a class="qr-url" [href]="qrUrl()" target="_blank" rel="noopener">{{ qrUrl() }}</a>
+          <p-button
+            label="下載 QR Code"
+            icon="pi pi-download"
+            severity="secondary"
+            [outlined]="true"
+            size="small"
+            (onClick)="downloadQrCode()"
+          />
+        } @else {
+          <div class="qr-placeholder" aria-hidden="true">
+            <i class="pi pi-qrcode"></i>
+          </div>
+          <p class="qr-title">{{ c.courseId }}</p>
+          <p class="qr-unavailable">課程未上架，尚無公開頁面，無法產生 QR Code</p>
+        }
       </div>
     </div>
   </div>
