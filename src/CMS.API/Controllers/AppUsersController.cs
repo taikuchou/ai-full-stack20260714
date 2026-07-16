@@ -33,6 +33,10 @@ public class AppUsersController : ControllerBase
     }
 
     /// <summary>Create a user. The initial password is set server-side from the configured default.</summary>
+    // Admin-only: Create/Update write RoleIds (n-n via AppUserRole), so an ungated caller could grant
+    // themselves Admin. Role assignment is a stronger privilege primitive than reset-password, which is
+    // already Admin-gated below. Reads (GetAll/Query/GetById) stay open to any authenticated user.
+    [Authorize(Roles = AppRoles.Admin)]
     [HttpPost]
     public async Task<ActionResult<AppUser>> Create([FromBody] AppUserRequest request, CancellationToken ct)
     {
@@ -50,6 +54,7 @@ public class AppUsersController : ControllerBase
     }
 
     /// <summary>Update a user. UserId (key) is taken from the body. The password is never modified here.</summary>
+    [Authorize(Roles = AppRoles.Admin)]
     [HttpPut]
     public async Task<ActionResult<AppUser>> Update([FromBody] AppUserRequest request, CancellationToken ct)
     {
@@ -65,6 +70,7 @@ public class AppUsersController : ControllerBase
     }
 
     /// <summary>Delete a user by UserId.</summary>
+    [Authorize(Roles = AppRoles.Admin)]
     [HttpDelete("{id}")]
     public async Task<IActionResult> Delete(string id, CancellationToken ct)
     {
