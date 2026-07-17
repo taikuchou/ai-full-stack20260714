@@ -1,7 +1,10 @@
 # CMS
 
 Full-stack CMS scaffolded from the database schema in `database/` following the conventions in
-`spec/code-gen.convention.md`. First feature implemented: **CRUD AppRole** (角色 / 使用者角色).
+`spec/code-gen.convention.md`. Seven full CRUD features (AppRole, AppUser, PublishStatus, Partner,
+CourseGroup, Course, FeaturedPromoItem) plus auth, RowAudit, and global error handling —
+see [docs/features.md](docs/features.md) for the full index. The AppRole endpoints below are kept
+as a worked example of the conventions.
 
 ## Layout
 
@@ -73,3 +76,14 @@ npm test -- --watch=false --browsers=ChromeHeadless
 - Sidebar nav: **系統管理 Admin › 角色 AppRole**.
 - Routes: `/app-roles` (list), `/app-roles/new` (add), `/app-roles/:id` (view),
   `/app-roles/:id/edit` (edit).
+
+## Security
+
+Every endpoint and route is behind auth by default (JWT bearer; global `AuthorizeFilter`). The project
+was audited end-to-end with `/cso` on 2026-07-17: the two prior real vulnerabilities (privilege
+escalation, CourseGroup cascade data-loss) are fixed and tested, and no new exploitable finding
+survived. Residual hardening items (login rate-limit/lockout over unsalted SHA-256, unconditional
+Swagger, `Encrypt=False` to SQL Server, and a few client-side notes) are deferred and tracked in
+[TODOS.md](TODOS.md) › Security, with the full report under `.gstack/security-reports/` (gitignored).
+See [docs/features.md](docs/features.md) › Security posture for the details, including why the
+PrimeNG confirm-dialog `[innerHTML]` is not an XSS.

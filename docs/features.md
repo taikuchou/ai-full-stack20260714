@@ -182,6 +182,34 @@ returns **204 with no body**. Like the rename, the account comes from the JWT, n
   so it stays valid until its 24h expiry. Existing tokens elsewhere are *not* revoked — this API is
   stateless and has no token blacklist.
 
+## Security posture (安全性) — cross-cutting, no sidebar entry
+
+Recorded from the `/cso` full-project audit (2026-07-17). Findings and the residual hardening backlog
+live in [../TODOS.md](../TODOS.md) › Security and `.gstack/security-reports/` (gitignored). The two
+real vulnerabilities from the prior review are fixed and tested; nothing new is exploitable.
+
+- **Fixed (commit `93dc471`):** privilege escalation via user/role management — Create/Update/Delete on
+  `AppUsersController` and `AppRolesController` are now `[Authorize(Roles = AppRoles.Admin)]`, covered by
+  `AuthorizationIntegrationTests.cs`. CourseGroup cascade data-loss — `FK_Course_CourseGroup` migrated to
+  `ON DELETE SET NULL` (`database/migrate-course-coursegroup-setnull.sql`).
+- **Not an XSS — do not re-file.** The delete/reset confirm dialogs interpolate user text
+  (`course.title`, `user.userId`, …) into PrimeNG's `ConfirmDialog`, which binds `message` via
+  `[innerHTML]`. That looks like a stored-XSS sink, but Angular's default sanitizer strips
+  `<script>` / `on*` handlers / `javascript:` URLs and **nothing bypasses it** (no `bypassSecurityTrust`
+  anywhere). The `<b>${pkid}</b>` renders bold precisely because Angular allows *safe* markup. Residual
+  is content-injection (a phishing link, an external image load), not script execution. A prior review
+  rated this a MEDIUM stored XSS with token theft — that is a false positive. **Verify
+  `bypassSecurityTrust` absence before ever rating an Angular `[innerHTML]` as script-XSS.**
+- **Clean, verified:** SQL fully parameterized (static `ORDER BY`, `LIKE` wildcard bound as a value, no
+  dynamic column names); no over-posting (repos enumerate columns; privilege DTOs are Admin-gated); no
+  secrets in code, schema, or tracked config (Windows-auth connection string, signing key read at runtime
+  from `SysConfig`); deps current with a tracked lockfile and no install scripts.
+- **Deferred hardening (see TODOS.md › Security):** login has no rate-limit/lockout over fast unsalted
+  SHA-256 (the one worth doing first); Swagger UI is served unconditionally in every environment
+  (`Program.cs:114`, endpoints still auth-gated); non-constant-time hash compare; `Encrypt=False` to SQL
+  Server; bearer attached to all HttpClient calls (no live off-origin leak); client `isAuthenticated` is
+  presence-only. None is an open exploitable door; all are accepted-risk or environment-gated.
+
 ## AppRole (角色) — no spec file
 
 Full CRUD; the reference implementation for the **string PK** pattern (`RoleId`). N-N to `AppUser`
