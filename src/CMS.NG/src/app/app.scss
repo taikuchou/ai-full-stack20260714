@@ -229,12 +229,24 @@
     }
   }
 
-  /* Unimplemented placeholder */
+  /* Unimplemented placeholder — must not look clickable: dimmed, with a 規劃中 tag. */
   &.placeholder {
     cursor: default;
+    opacity: 0.45;
 
     &:hover {
       background: transparent;
+    }
+
+    .nav-label::after {
+      content: '規劃中';
+      margin-left: 0.5rem;
+      font-size: 0.7rem;
+      color: var(--text-muted);
+      border: 1px solid var(--border);
+      border-radius: 999px;
+      padding: 0.05rem 0.4rem;
+      vertical-align: 1px;
     }
   }
 }
