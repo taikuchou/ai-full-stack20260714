@@ -60,7 +60,7 @@
             [severity]="user.isActive ? 'success' : 'danger'" />
         </td>
         <td>{{ user.roleCount }}</td>
-        <td>{{ user.passwordUpdatedTime ? (user.passwordUpdatedTime + 'Z' | date: 'yyyy-MM-dd HH:mm') : '—' }}</td>
+        <td>{{ user.passwordUpdatedTime ? (user.passwordUpdatedTime + 'Z' | date: 'yyyy/MM/dd HH:mm') : '—' }}</td>
         <td class="text-center actions">
           <p-button
             icon="pi pi-eye"
