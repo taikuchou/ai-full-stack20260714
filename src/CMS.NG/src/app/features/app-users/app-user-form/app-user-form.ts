@@ -155,6 +155,7 @@ export class AppUserForm implements OnInit {
       icon: 'pi pi-exclamation-triangle',
       acceptLabel: '重設',
       rejectLabel: '取消',
+      rejectButtonStyleClass: 'p-button-text',
       accept: () => this.resetPassword(userId),
     });
   }
