@@ -35,7 +35,8 @@
     currentPageReportTemplate="{first}–{last} 筆，共 {totalRecords} 筆"
     dataKey="pkid"
     styleClass="p-datatable-sm p-datatable-gridlines"
-    [scrollable]="true">
+    [scrollable]="true"
+    [tableStyle]="{ 'min-width': '120rem' }">
     <ng-template pTemplate="header">
       <tr>
         <th pSortableColumn="pkid" style="width: 6rem">主代碼 <p-sortIcon field="pkid" /></th>
