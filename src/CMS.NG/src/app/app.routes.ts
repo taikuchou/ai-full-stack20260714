@@ -10,7 +10,8 @@ export const routes: Routes = [
     path: '',
     canActivate: [authGuard],
     children: [
-      { path: '', redirectTo: 'app-roles', pathMatch: 'full' },
+      // Land on the CMS's primary object, not the least-used admin table.
+      { path: '', redirectTo: 'courses', pathMatch: 'full' },
       {
         path: 'profile',
         loadComponent: () => import('./features/profile/profile').then((m) => m.Profile),
@@ -162,7 +163,7 @@ export const routes: Routes = [
             './features/featured-promo-items/featured-promo-item-list/featured-promo-item-list'
           ).then((m) => m.FeaturedPromoItemList),
       },
-      { path: '**', redirectTo: 'app-roles' },
+      { path: '**', redirectTo: 'courses' },
     ],
   },
 ];
