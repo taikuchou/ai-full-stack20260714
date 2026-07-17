@@ -9,6 +9,27 @@ import { provideAnimationsAsync } from '@angular/platform-browser/animations/asy
 import { providePrimeNG } from 'primeng/config';
 import { MessageService } from 'primeng/api';
 import Aura from '@primeng/themes/aura';
+import { definePreset } from '@primeng/themes';
+
+// The app shell brands in indigo (--primary: #4f46e5 in app.scss). Without this override PrimeNG
+// controls render Aura's factory-default emerald, giving the app two competing primary colors.
+const CmsPreset = definePreset(Aura, {
+  semantic: {
+    primary: {
+      50: '{indigo.50}',
+      100: '{indigo.100}',
+      200: '{indigo.200}',
+      300: '{indigo.300}',
+      400: '{indigo.400}',
+      500: '{indigo.500}',
+      600: '{indigo.600}',
+      700: '{indigo.700}',
+      800: '{indigo.800}',
+      900: '{indigo.900}',
+      950: '{indigo.950}',
+    },
+  },
+});
 
 import { routes } from './app.routes';
 import { authInterceptor } from './core/interceptors/auth.interceptor';
@@ -26,7 +47,7 @@ export const appConfig: ApplicationConfig = {
     MessageService,
     providePrimeNG({
       theme: {
-        preset: Aura,
+        preset: CmsPreset,
         // Dark mode only when `.app-dark` is present; keeps the default light look of the UI sample.
         options: { darkModeSelector: '.app-dark' },
       },
