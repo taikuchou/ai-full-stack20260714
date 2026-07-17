@@ -16,3 +16,9 @@ body {
 * {
   box-sizing: border-box;
 }
+
+/* Digits in data tables align vertically (prices, hours, ids); CJK text is unaffected. */
+.p-datatable th,
+.p-datatable td {
+  font-variant-numeric: tabular-nums;
+}
