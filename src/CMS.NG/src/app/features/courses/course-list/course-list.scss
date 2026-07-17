@@ -110,9 +110,11 @@
     input,
     ::ng-deep .p-select,
     ::ng-deep .p-datepicker,
+    ::ng-deep .p-datepicker input,
     ::ng-deep .p-inputnumber,
     ::ng-deep .p-inputnumber input {
       width: 100%;
+      min-width: 0;
     }
 
     .range {
@@ -120,7 +122,14 @@
       align-items: center;
       gap: 0.5rem;
 
+      /* Two 100%-width pickers + tilde must shrink to share the row, not overflow the drawer. */
+      > * {
+        flex: 1 1 0;
+        min-width: 0;
+      }
+
       .tilde {
+        flex: 0 0 auto;
         color: #94a3b8;
       }
     }
