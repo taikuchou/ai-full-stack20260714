@@ -324,3 +324,47 @@
   background: #f1f5f9;
   padding: 1.25rem 1.5rem;
 }
+
+/* ---- Mobile / tablet: sidebar becomes an overlay ----
+   `collapsed` flips meaning here: instead of the 72px icon rail it means fully hidden,
+   and the expanded state floats over the content rather than squeezing it. */
+@media (max-width: 991px) {
+  .sidebar {
+    position: fixed;
+    top: 60px;
+    bottom: 0;
+    left: 0;
+    width: 260px;
+    z-index: 1000;
+    box-shadow: 4px 0 16px rgba(0, 0, 0, 0.18);
+    transition: transform 0.2s ease, width 0.2s ease;
+  }
+
+  .layout.collapsed {
+    .sidebar {
+      width: 260px;
+      transform: translateX(-100%);
+      box-shadow: none;
+    }
+
+    /* The icon-rail label hiding doesn't apply — the sidebar is either full or off-screen. */
+    .nav-section-header,
+    .nav-label,
+    .caret,
+    .profile-info {
+      display: revert;
+    }
+    .nav-item {
+      justify-content: flex-start;
+      padding-left: 0.75rem;
+      padding-right: 0.75rem;
+    }
+    .nav-profile {
+      justify-content: flex-start;
+    }
+  }
+
+  .content {
+    padding: 1rem;
+  }
+}

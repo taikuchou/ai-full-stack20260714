@@ -88,7 +88,8 @@ export class App {
   protected readonly authService = inject(AuthService);
   private readonly router = inject(Router);
 
-  protected readonly collapsed = signal(false);
+  // Below the mobile breakpoint the sidebar is an overlay (see app.scss), so it starts closed.
+  protected readonly collapsed = signal(window.innerWidth < 992);
   protected readonly isLoginPage = signal(this.router.url.startsWith('/login'));
 
   protected readonly sections = computed<NavSection[]>(() =>
