@@ -91,7 +91,7 @@ spec generation. Reading it now."
 Read `spec/{SUB_SYSTEM}/{TABLE}.md` (just generated or pre-existing).
 Read `spec/code-gen.convention.md` for scaffolding conventions.
 Follow CLAUDE.md for all non-obvious rules (string PKs, DateOnly handlers,
-RowAudit logging, sticky toolbar pattern, session storage keys, etc.).
+RowAudit logging + history badge, page-header pattern, session storage keys, etc.).
 
 Build in this order:
 
@@ -120,11 +120,13 @@ Build in this order:
    - Filter drawer with all query fields from spec
    - `confirmDelete` message includes the record's PK and display name
 9. **Detail component** — `{NG_PROJECT}/src/app/features/{table-plural}/{table-kebab}-detail/`
-   - `RowAuditBadgeComponent` in toolbar `#start`
+   - `<app-row-audit-badge>` directly after the `<h1>` in `.page-title` (see below)
    - Primary-Foreign link buttons if spec has them
 10. **Form component** — `{NG_PROJECT}/src/app/features/{table-plural}/{table-kebab}-form/`
-    - Reactive Forms; `forkJoin` for parallel lookups; sticky `p-toolbar`
-    - `RowAuditBadgeComponent` in toolbar `#start`
+    - Reactive Forms; `forkJoin` for parallel lookups
+    - `<app-row-audit-badge>` directly after the `<h1>` in `.page-title` (see below)
+    - Pass `null` while adding — an unsaved row has no history and must not be queried.
+      Hold it in an `auditPkid = signal<number | null>(null)`, set once the record loads.
 11. **Lazy route** — add to `{NG_PROJECT}/src/app/app.routes.ts`
     (route order: `/new` before `/:id`)
 12. **Sidebar entry** — add to `{NG_PROJECT}/src/app/app.html` and `app.ts` under
@@ -132,6 +134,33 @@ Build in this order:
 13. **Lookup endpoint** (if this table is used as an FK target elsewhere) —
     add to `{API_PROJECT}/{API_PROJECT}/Controllers/LookupsController.cs` and
     `{NG_PROJECT}/src/app/core/services/lookup.service.ts`
+
+#### Page header markup (detail + form)
+
+There is **no `p-toolbar` in this app** — `.page-header` is it, with `.page-title` as its
+start slot and `.page-actions` as its end. Copy `partner-form` for the shape:
+
+```html
+<div class="page-header">
+  <div class="page-title">
+    <h1>{{ isEdit() ? '編輯合作廠商' : '新增合作廠商' }}</h1>
+    <app-row-audit-badge tableName="Partner" [pkid]="auditPkid()" />
+  </div>
+  <div class="page-actions">
+    <!-- p-button cancel / save -->
+  </div>
+</div>
+```
+
+The badge (`app-row-audit-badge`, `core/components/row-audit-badge/`) styles its own
+placement and fetches on init, so a spec rendering one of these pages needs
+`provideHttpClient()` + `provideHttpClientTesting()`.
+
+On **AppRole / AppUser pass the numeric `pkid`**, not RoleId/UserId — the trail is keyed by
+the entity's `pkid`.
+
+`.page-header` is **not sticky by default**; only `course-form` pins it. Add
+`position: sticky` only if the spec's form is long enough to warrant it.
 
 ### Tests (both sides — always generated)
 

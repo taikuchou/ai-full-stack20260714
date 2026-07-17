@@ -7,7 +7,14 @@
       "PowerShell(bun *)",
       "Bash(\"/c/Program Files/nodejs/node.exe\" --version)",
       "Bash(powershell.exe -NoProfile -Command '[System.Environment]::GetEnvironmentVariable\\(\\\\\"Path\\\\\",\\\\\"Machine\\\\\"\\)')",
-      "PowerShell(\\([System.Environment]::GetEnvironmentVariable\\(\"Path\",\"Machine\"\\) -split ';'\\) | Where-Object { $_ -match 'nodejs' })"
+      "PowerShell(\\([System.Environment]::GetEnvironmentVariable\\(\"Path\",\"Machine\"\\) -split ';'\\) | Where-Object { $_ -match 'nodejs' })",
+      "Bash(git push *)",
+      "Bash(git checkout *)",
+      "Bash(dotnet build *)",
+      "Bash(dotnet test *)"
     ]
+  },
+  "worktree": {
+    "baseRef": "head"
   }
 }

@@ -56,3 +56,4 @@ yarn-error.log*
 # Local env overrides (keep the checked-in environment.*.ts files)
 .env
 .env.local
+.gstack/
