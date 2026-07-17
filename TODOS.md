@@ -172,6 +172,35 @@ what is actually worth doing.
   token theft. Recorded so nobody re-files it as a high-severity XSS. Optional hardening: HTML-escape
   the interpolated free-text, keep the numeric `<b>${pkid}</b>`.
 
+## Design (deferred from /design-review, 2026-07-17)
+
+Fixed in that session (11 commits `560e743..14b7dd0` on develop): courses-table column crush,
+filter-drawer clipped date inputs, promo page missing chrome, mobile sidebar overlay, placeholder
+nav dimming + 規劃中 tag, confirm-dialog button hierarchy, PrimeNG primary → indigo (`definePreset`),
+key-column tint removal, default route → /courses, tabular-nums, AppUser date format. Full report:
+`~/.gstack/projects/taikuchou-ai-full-stack20260714/designs/design-audit-20260717/`.
+
+- **[High] FeaturedPromoItem interaction-language conformance.** Chrome was fixed; still off-system:
+  underlined English "Edit/Copy/Delete/Paste" text links (`featured-promo-item-list.html:68-83`)
+  vs icon p-buttons elsewhere, monospace ASCII `<<--`/`-->>` week pager (`:26-28`), faux read-only
+  input display cells with hardcoded `flex: 0 0 21rem` widths, `+`/`--` reorder buttons, and it is
+  the only feature without `<app-row-audit-badge>`. User chose to defer the rework (D4).
+- **[High] Page chrome is six diverging copy-paste forks.** `.page-card`/`.page-header`/`.key-col`/
+  `.filter-body` duplicated per feature SCSS (now seven copies with the promo fix). Extract to one
+  shared stylesheet; forks have already drifted (detail label col 9rem vs 8rem, border differences,
+  LF/CRLF-only diffs). Root cause of the promo regression.
+- **[High] A11y gaps (from source audit).** No accessible names on CRUD icon-only action buttons
+  (`pTooltip` is not a name); filter labels missing `for`; `:focus-visible` styled only in
+  `row-audit-badge.scss`; dblclick-only inline editing has no keyboard path; topbar icons 34-38px.
+- **[Medium] No design tokens.** 32 distinct hardcoded hex across 3 color systems (`app.scss` +
+  `login.scss` custom props duplicated; `--p-*` used only by promo); danger is `#dc2626`/`#d32f2f`/
+  `#ef4444`; free-hand spacing values (`0.62rem`). Tokenize alongside the chrome extraction.
+- **[Medium] Typeface is the default system stack** (`styles.scss:9`) — "gave up on typography"
+  signal; pick a deliberate zh-TW-capable pairing if brand matters.
+- **[Polish] Login page:** password-reveal eye floats outside the field; 登入 button small/left in a
+  centered card; indigo-violet gradient backdrop. **[Polish] Motion:** zero intentional animations;
+  no `prefers-reduced-motion` handling.
+
 ## Cross-cutting
 
 - **`<p-toast />` sits at `app.html:3`, outside the `@if (isLoginPage())` split.**
