@@ -1,0 +1,95 @@
+<p-toast />
+<p-confirmDialog />
+
+<div class="page-card">
+  <!-- Header toolbar -->
+  <div class="page-header">
+    <div class="page-title">
+      <h1>上稿作業 FeaturedPromoItem</h1>
+      <span class="subtitle">首頁精選活動排程</span>
+    </div>
+  </div>
+
+  <!-- TrainingCenter tabs -->
+  @if (trainingCenters().length) {
+    <p-tabs [value]="activeCenterPkid() ?? 0" (valueChange)="selectCenter($event)">
+      <p-tablist>
+        @for (center of trainingCenters(); track center.value) {
+          <p-tab [value]="center.value">{{ center.label }}</p-tab>
+        }
+      </p-tablist>
+    </p-tabs>
+  }
+
+  <!-- Week navigator -->
+  <div class="week-nav">
+    <button type="button" class="week-arrow" (click)="prevWeek()" aria-label="上一週">&lt;&lt;--</button>
+    <span class="week-label">{{ weekLabel() }}</span>
+    <button type="button" class="week-arrow" (click)="nextWeek()" aria-label="下一週">--&gt;&gt;</button>
+  </div>
+
+  <!-- Week grid: one block per day, three slots each -->
+  <div class="week-grid" [class.loading]="loading()">
+    @for (day of days(); track day.iso) {
+      <section class="day">
+        <header class="day-header">{{ day.label }}</header>
+
+        @for (slot of slots; track slot) {
+          @if (isEditing(day.iso, slot)) {
+            <app-featured-promo-item-form
+              [scheduleOn]="day.iso"
+              [slot]="slot"
+              [trainingCenterPkid]="activeCenterPkid() ?? 0"
+              [item]="editTarget()?.item ?? null"
+              [seed]="editTarget()?.seed ?? null"
+              (saved)="onSaved()"
+              (cancelled)="onCancelled()" />
+          } @else {
+            <div class="slot-row">
+              <span class="slot-no">{{ slot }}</span>
+
+              @if (itemAt(day.iso, slot); as item) {
+                <button
+                  type="button"
+                  class="link-btn"
+                  [disabled]="!canMove(slot, 1)"
+                  title="往下移一個順位"
+                  (click)="move(item, 1)">
+                  +
+                </button>
+                <button
+                  type="button"
+                  class="link-btn"
+                  [disabled]="!canMove(slot, -1)"
+                  title="往上移一個順位"
+                  (click)="move(item, -1)">
+                  --
+                </button>
+                <button type="button" class="link-btn" (click)="edit(day.iso, slot)">Edit</button>
+                <button type="button" class="link-btn" (click)="copy(item)">Copy</button>
+                <button type="button" class="link-btn danger" (click)="confirmDelete(item)">
+                  Delete
+                </button>
+
+                <span class="cell promo-code">{{ item.promoCode }}</span>
+                <span class="cell topic">{{ item.topic }}</span>
+                <span class="cell description">{{ item.description }}</span>
+              } @else {
+                <span class="link-btn disabled">+</span>
+                <span class="link-btn disabled">--</span>
+                <button type="button" class="link-btn" (click)="edit(day.iso, slot)">Edit</button>
+                @if (clipboard()) {
+                  <button type="button" class="link-btn" (click)="paste(day.iso, slot)">Paste</button>
+                }
+
+                <span class="cell promo-code empty"></span>
+                <span class="cell topic empty"></span>
+                <span class="cell description empty"></span>
+              }
+            </div>
+          }
+        }
+      </section>
+    }
+  </div>
+</div>

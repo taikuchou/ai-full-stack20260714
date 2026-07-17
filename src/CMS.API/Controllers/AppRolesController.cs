@@ -1,5 +1,7 @@
 using CMS.API.Models;
 using CMS.API.Repositories;
+using CMS.API.Security;
+using Microsoft.AspNetCore.Authorization;
 using Microsoft.AspNetCore.Mvc;
 
 namespace CMS.API.Controllers;
@@ -31,6 +33,9 @@ public class AppRolesController : ControllerBase
     }
 
     /// <summary>Create a role.</summary>
+    // Admin-only: creating, editing or deleting role definitions is a privileged operation. Reads
+    // (GetAll/Query/GetById) stay open to any authenticated user.
+    [Authorize(Roles = AppRoles.Admin)]
     [HttpPost]
     public async Task<ActionResult<AppRole>> Create([FromBody] AppRoleRequest request, CancellationToken ct)
     {
@@ -48,6 +53,7 @@ public class AppRolesController : ControllerBase
     }
 
     /// <summary>Update a role. RoleId (key) is taken from the body.</summary>
+    [Authorize(Roles = AppRoles.Admin)]
     [HttpPut]
     public async Task<ActionResult<AppRole>> Update([FromBody] AppRoleRequest request, CancellationToken ct)
     {
@@ -63,6 +69,7 @@ public class AppRolesController : ControllerBase
     }
 
     /// <summary>Delete a role by RoleId.</summary>
+    [Authorize(Roles = AppRoles.Admin)]
     [HttpDelete("{id}")]
     public async Task<IActionResult> Delete(string id, CancellationToken ct)
     {

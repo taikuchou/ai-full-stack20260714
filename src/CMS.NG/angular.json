@@ -2,7 +2,8 @@
   "$schema": "./node_modules/@angular/cli/lib/config/schema.json",
   "version": 1,
   "cli": {
-    "packageManager": "npm"
+    "packageManager": "npm",
+    "analytics": "01a79b8c-8c0d-4a44-a3ee-395b27887edd"
   },
   "newProjectRoot": "projects",
   "projects": {
@@ -35,6 +36,9 @@
             "styles": [
               "node_modules/primeicons/primeicons.css",
               "src/styles.scss"
+            ],
+            "allowedCommonJsDependencies": [
+              "qrcode"
             ]
           },
           "configurations": {

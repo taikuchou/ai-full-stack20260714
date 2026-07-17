@@ -4,16 +4,24 @@
 <div class="page-header">
   <div class="page-title">
     <h1>檢視使用者</h1>
+    @if (user(); as u) {
+      <!-- AppUser's key is UserId, but the audit trail is keyed by the numeric pkid column. -->
+      <app-row-audit-badge tableName="AppUser" [pkid]="u.pkid" />
+    }
   </div>
   <div class="page-actions">
     <p-button label="返回" icon="pi pi-arrow-left" severity="secondary" [outlined]="true" (onClick)="back()" />
-    <p-button
-      label="重設密碼"
-      icon="pi pi-key"
-      severity="warn"
-      [outlined]="true"
-      [disabled]="!user()"
-      (onClick)="confirmResetPassword()" />
+    <!-- Admin only: the API enforces the role, so a non-Admin would only get a 403 here. -->
+    @if (isAdmin()) {
+      <p-button
+        label="重設密碼"
+        icon="pi pi-key"
+        severity="warn"
+        [outlined]="true"
+        [disabled]="!user()"
+        data-testid="reset-password-button"
+        (onClick)="confirmResetPassword()" />
+    }
     <p-button label="編輯" icon="pi pi-pencil" (onClick)="edit()" />
   </div>
 </div>
@@ -39,7 +47,7 @@
       </dd>
 
       <dt>密碼更新時間</dt>
-      <dd>{{ u.passwordUpdatedTime ? (u.passwordUpdatedTime + 'Z' | date: 'yyyy-MM-dd HH:mm') : '—' }}</dd>
+      <dd>{{ u.passwordUpdatedTime ? (u.passwordUpdatedTime + 'Z' | date: 'yyyy/MM/dd HH:mm') : '—' }}</dd>
 
       <dt>角色數</dt>
       <dd>{{ u.roleCount }}</dd>

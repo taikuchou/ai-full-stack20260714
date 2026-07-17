@@ -340,7 +340,10 @@ ALTER TABLE [dbo].[Certification] CHECK CONSTRAINT [FK_Certification_Partner]
 GO
 ALTER TABLE [dbo].[Course]  WITH CHECK ADD  CONSTRAINT [FK_Course_CourseGroup] FOREIGN KEY([CourseGroup_pkid])
 REFERENCES [dbo].[CourseGroup] ([pkid])
-ON DELETE CASCADE
+-- SET NULL, not CASCADE: CourseGroup_pkid is nullable (the UI's 無/none option), so deleting a
+-- CourseGroup must null out its courses' group, never delete the courses. CASCADE here silently
+-- wiped every course in a group (and bypassed RowAudit).
+ON DELETE SET NULL
 GO
 ALTER TABLE [dbo].[Course] CHECK CONSTRAINT [FK_Course_CourseGroup]
 GO

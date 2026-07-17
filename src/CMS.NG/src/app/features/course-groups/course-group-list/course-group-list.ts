@@ -142,6 +142,7 @@ export class CourseGroupList implements OnInit {
       icon: 'pi pi-exclamation-triangle',
       acceptLabel: '刪除',
       rejectLabel: '取消',
+      rejectButtonStyleClass: 'p-button-text',
       acceptButtonStyleClass: 'p-button-danger',
       accept: () => this.remove(courseGroup),
     });

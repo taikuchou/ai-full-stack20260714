@@ -1,9 +1,214 @@
 # Implemented features — detail
 
-Per-feature decisions and deviations. The index lives in [../CLAUDE.md](../CLAUDE.md); reusable
-patterns live in [../spec/code-gen.convention.md](../spec/code-gen.convention.md). Where a feature
-has a build spec under `spec/{area}/`, that spec is the fuller source — this file records what the
-spec does not, plus the pattern each feature exemplifies.
+Per-feature decisions and deviations. Reusable patterns live in
+[../spec/code-gen.convention.md](../spec/code-gen.convention.md). Where a feature has a build spec
+under `spec/{area}/`, that spec is the fuller source — this file records what the spec does not,
+plus the pattern each feature exemplifies.
+
+## Index
+
+All seven are full CRUD. Each row names the PK pattern it exemplifies — copy the closest match when
+scaffolding.
+
+| Entity | 中文 | PK pattern | Nav | Spec |
+|---|---|---|---|---|
+| AppRole | 角色 | string (`RoleId`) | 系統管理 › 角色 | *(none — mirror the code)* |
+| AppUser | 使用者 | string (`UserId`) | 系統管理 › 使用者 | [auth/AppUser.md](../spec/auth/AppUser.md) |
+| PublishStatus | 發布狀態 | `tinyint`, user-assigned | 系統管理 › 發布狀態 | [admin/PublishStatus.md](../spec/admin/PublishStatus.md) |
+| Partner | 合作廠商 | `smallint IDENTITY` | 課程管理 › 合作廠商 | [course/Partner.md](../spec/course/Partner.md) |
+| CourseGroup | 課程群組 | `smallint IDENTITY` | 課程管理 › 課程群組 | [course/CourseGroup.md](../spec/course/CourseGroup.md) |
+| Course | 課程 | `int IDENTITY` | 課程管理 › 課程 | [course/Course.md](../spec/course/Course.md) |
+| FeaturedPromoItem | 上稿作業 | `int IDENTITY` | 首頁管理 › 上稿作業 | [custom/FeaturedPromoItem/](../spec/custom/FeaturedPromoItem/FeaturedPromoItem.spec.md) |
+
+**Course** is the reference for foreign keys and N-N (beyond the AppRole↔AppUser junction) — copy it
+for anything with FKs. **FeaturedPromoItem is a customized CRUD** — do **not** copy it when
+scaffolding a conventional entity; see its section below for what it deviates on and why.
+
+Nav links from a built entity to an unbuilt one are **deferred until the target feature exists**.
+
+## RowAudit (異動記錄) — cross-cutting, no sidebar entry
+
+Every repository write is audited: all seven CRUD repositories call `IRowAuditWriter`
+(`CMS.API/Auditing/`) after a successful Insert / Update / Delete, writing one RowAudit row.
+A new entity **needs no audit wiring beyond injecting `IRowAuditWriter`** and calling it — see
+`PartnerRepository` for the smallest example, `CourseRepository` for one with FKs and N-N.
+
+Rules the retrofit follows, worth keeping to:
+
+- The audit row is written **on the operation's own connection and transaction**, so a rolled-back
+  or failed change leaves no audit row. Repositories that had no transaction (Partner, CourseGroup,
+  PublishStatus, FeaturedPromoItem) gained one for this.
+- Update/Delete **load the row inside that transaction first** — Update to diff before/after,
+  Delete because the row is gone afterwards. Reading on a second connection would block on the
+  transaction's own locks.
+- `ActionDesc` is the entity's first string property (Insert/Delete) or the changed property names
+  (Update); an update that changed nothing writes **no** row.
+- The audited entity is the **response model**, so FK label fields (`PartnerName`) and N-N id lists
+  are included: changing `Partner_pkid` audits `Partner_pkid, PartnerName`, and link changes show up
+  as `CertificationPkids`.
+- `UserName` comes from the request's JWT (`ClaimTypes.Name`), falling back to `system`.
+
+`FeaturedPromoItemRepository.MoveAsync` also audits: a slot swap writes one Update row per moved row,
+recording the net move rather than the intermediate parking-slot state.
+
+### Viewing a record's trail
+
+`GET /api/rowaudit?tableName=Course&pkid=123` returns that record's history newest first
+(`RowAuditController` → `IRowAuditRepository`); an unchanged record is an empty list, not a 404.
+
+The reusable `RowAuditBadge` (`core/components/row-audit-badge/`, selector `app-row-audit-badge`)
+renders it. Drop it into a page header's `.page-title` — it needs no per-page CSS:
+
+```html
+<app-row-audit-badge tableName="Partner" [pkid]="partner().pkid" />
+```
+
+- It shows the latest change inline and opens the full trail in a dialog.
+- **Pass `null` for a new, unsaved record** — the badge then shows its empty state and fetches nothing.
+- **On AppRole/AppUser pass the numeric `pkid`, not RoleId/UserId** — the writer keys the trail by the
+  entity's `pkid` property, which on those tables is the display-only IDENTITY column.
+- **Timestamps are UTC with no offset** (`2026-07-15T07:21:04.203`). The component's `parseUtc` marks
+  them UTC before formatting to local; `new Date(value)` would read them as local and render every
+  entry 8 hours early. `RowAuditHistoryItem.dateTime` documents this.
+- It is on all 12 routed detail/form pages. **FeaturedPromoItem is excluded** — it has no detail page
+  and its form is an inline grid-cell editor with no header to host the badge; its rows are still
+  audited, just not viewable from that cell.
+
+A page spec that renders a page containing the badge needs `provideHttpClient()` +
+`provideHttpClientTesting()`, since the badge fetches on init.
+
+**There is no `p-toolbar` in this app** — `.page-header` is it, and `.page-title` is its start
+slot. Ignore `spec/admin/PublishStatus.md:296` ("Sticky `p-toolbar`; `RowAuditBadgeComponent` in
+toolbar `#start`"): that spec is stale, PrimeNG's Toolbar is imported nowhere in `src/CMS.NG`, and
+every real page places the badge directly after the `<h1>` inside `.page-title`.
+
+## Error handling (全域錯誤處理) — cross-cutting, no sidebar entry
+
+The safety net is global and already wired. Wire into it; do not rebuild it per feature.
+
+**Backend — `GlobalExceptionHandler` (`CMS.API/Middleware/`) owns unexpected errors.**
+
+- **No per-controller or per-repository try/catch for unexpected errors.** The handler logs the
+  full detail server-side and returns a generic 500 carrying a `traceId` — never a stack trace,
+  an exception message, or SQL. Catch only to *add meaning*, and then return a deliberate status.
+- **Deliberate responses never reach the handler** and stay exactly as they are: 401/403 from the
+  auth pipeline, validation 400s, 404s. Keep returning them from the controller as today.
+
+**Frontend — errors surface once, globally.**
+
+- `errorInterceptor` toasts 500-class responses, and status 0 (unreachable API), through the root
+  `MessageService` and the shell's `<p-toast />`. Registered in `app.config.ts`.
+- **Don't add per-page handling for server errors.** A page's own `<p-toast />` is for that page's
+  own save/load messages.
+- The shell's `<p-toast />` sits at `app.html:3`, deliberately *outside* the login/shell split, so
+  a failed login request still surfaces.
+- `authInterceptor` owns **401 → clear session → /login**. Pages still handle their own 400/404.
+
+## Auth (登入 / 個人資料) — not a CRUD feature, no sidebar entry
+
+`POST /api/auth/login` (`AuthController` + `AuthRepository`) takes `{userId, password}` and returns
+`{userId, userName, accessToken}`. The client side is the `/login` page + `AuthService` (session
+storage), `authGuard` and `authInterceptor`; there is no sidebar entry. `PUT /api/auth/profile`
+backs the `/profile` page, reached from the topbar avatar menu (see **My Profile** below).
+
+- **Credential check:** `UserId` matched exactly, `IsActive` must be true, and `PasswordHash` must
+  equal `PasswordHasher.Hash(password)` (SHA-256, uppercase hex). Unknown user, wrong password and
+  inactive account all return the **same** generic 401 `{"message":"Invalid credentials."}` — never
+  reveal which check failed. `LoginResponse` has no `PasswordHash` property, so it cannot leak.
+- **Signing key:** read at runtime from `SysConfig['appConfig'].symmetricSecurityKey` (JSON), never
+  hard-coded — same SysConfig row `AppUserRepository` reads `defaultPassword` from. The key must be
+  **≥ 32 chars**: HmacSha256 requires a 256-bit key and the seeded value is exactly 32.
+- **Token:** 24h lifetime; claims are `NameIdentifier` (UserId), `Name` (UserName), and one `Role`
+  claim per `AppUserRole.RoleId`. The client re-reads the roles off the JWT (`jwt.util`) rather than
+  trusting a server-sent list, and stores the profile in **session** storage (cleared on tab close).
+- **Claim-URI trap.** .NET writes these as long XML-namespace URIs, and **`ClaimTypes.Role` is in a
+  different namespace from its siblings**: role is `schemas.microsoft.com/ws/2008/06/...`, while
+  NameIdentifier/Name are `schemas.xmlsoap.org/ws/2005/05/...`. `jwt.util.ts` had the xmlsoap URI
+  for role, so `decodeJwtRoles` returned `[]` for every real token and the Admin nav item never
+  appeared. It went unnoticed because the specs built their fake tokens from the same wrong
+  constant — green and self-consistent. `jwt.util.spec.ts` now also decodes a **token captured from
+  the real generator**; keep that fixture if you touch the claim types.
+- **Enforcement:** a global `AuthorizeFilter` (`Program.cs`) protects **every** endpoint; the login
+  action opts out with `[AllowAnonymous]` — without it login would demand the token it issues.
+  That attribute sits on the **Login action, not on `AuthController`**, and must stay there:
+  `AllowAnonymous` short-circuits authorization for everything it covers and an action-level
+  `[Authorize]` cannot win it back, so hoisting it to the class would silently expose
+  `PUT /api/auth/profile` to anonymous callers. `UpdateProfile_WithoutBearerToken_ReturnsUnauthorized`
+  guards this.
+  Validation uses `ISigningKeyProvider`, which resolves the same SysConfig key **lazily** and caches
+  it, so startup never blocks on the database. Issuer/audience are not validated; lifetime and
+  signature are.
+- **401 handling:** `authInterceptor` attaches the bearer token and, on any 401, clears the session —
+  so an expired token drops you back to `/login` rather than looping.
+- **The `Auth:Disabled` / `authDisabled` escape hatch** must be flipped on both sides at once; see
+  [setup-notes.md](setup-notes.md).
+
+### My Profile (個人資料) — `/profile`
+
+`PUT /api/auth/profile` takes `{userName}` and returns `{userId, userName, accessToken}`. The page
+shows UserId and roles read-only and lets a user rename **only themselves**.
+
+- **The account renamed comes from the JWT** (`ClaimTypes.NameIdentifier`), never the body.
+  `UpdateProfileRequest` deliberately has no `UserId` and no roles field, so a `userId` sent in the
+  JSON binds to nothing and is dropped — a caller cannot rename or elevate anyone else.
+- **UserName only:** `UpdateUserNameAsync` writes that one column, leaving `IsActive`,
+  `PasswordHash` and `AppUserRole` unreachable. Empty/whitespace → 400; the name is trimmed first.
+- **The token is re-issued** with the new `Name` claim, so it never goes stale — note this also
+  **resets the 24h expiry**. Roles on the new token are re-read from the database rather than copied
+  from the caller's token, so a rename can never widen them. `AuthService.updateUserName` stores the
+  re-issued token, which refreshes session storage and the shell's userName.
+- Admin-editing *another* user's name is a different path: the AppUser CRUD feature.
+
+### Change Password (變更密碼) — on the `/profile` page
+
+`POST /api/auth/change-password` takes `{currentPassword, newPassword, confirmNewPassword}` and
+returns **204 with no body**. Like the rename, the account comes from the JWT, not the body.
+
+- **Plaintext in, nothing out.** No hash crosses the boundary in either direction: hashing is the
+  server's job, and accepting a client-supplied hash would let a caller replay a stolen one verbatim.
+- **Order of checks matters:** current password → complexity → confirm match. The current-password
+  check is first so a wrong guess reveals nothing about the new password's rule; complexity precedes
+  the match check so someone retyping a weak password consistently still hears the real problem.
+- **Complexity** (`Security/PasswordPolicy.cs`): ≥ 8 chars **and** ≥ 3 of 4 classes (upper / lower /
+  digit / symbol, where symbol is any non-alphanumeric). One bilingual message covers both halves —
+  saying which half failed narrows a guess. `core/utils/password-policy.ts` mirrors it client-side
+  for instant feedback, message character-for-character identical; **the server re-checks and is the
+  authority**.
+- **On success:** `PasswordHash = SHA256(new)` (uppercase hex, via `PasswordHasher`) and
+  `PasswordUpdatedTime` is stamped. Unlike `ResetPasswordAsync` (which uses SQL `GETUTCDATE()`),
+  `ChangePasswordAsync` **takes the timestamp as a parameter** so it is assertable in the mocked-repo
+  tests — the suite has no database.
+- **The session survives a password change:** the JWT encodes identity and roles, not the password,
+  so it stays valid until its 24h expiry. Existing tokens elsewhere are *not* revoked — this API is
+  stateless and has no token blacklist.
+
+## Security posture (安全性) — cross-cutting, no sidebar entry
+
+Recorded from the `/cso` full-project audit (2026-07-17). Findings and the residual hardening backlog
+live in [../TODOS.md](../TODOS.md) › Security and `.gstack/security-reports/` (gitignored). The two
+real vulnerabilities from the prior review are fixed and tested; nothing new is exploitable.
+
+- **Fixed (commit `93dc471`):** privilege escalation via user/role management — Create/Update/Delete on
+  `AppUsersController` and `AppRolesController` are now `[Authorize(Roles = AppRoles.Admin)]`, covered by
+  `AuthorizationIntegrationTests.cs`. CourseGroup cascade data-loss — `FK_Course_CourseGroup` migrated to
+  `ON DELETE SET NULL` (`database/migrate-course-coursegroup-setnull.sql`).
+- **Not an XSS — do not re-file.** The delete/reset confirm dialogs interpolate user text
+  (`course.title`, `user.userId`, …) into PrimeNG's `ConfirmDialog`, which binds `message` via
+  `[innerHTML]`. That looks like a stored-XSS sink, but Angular's default sanitizer strips
+  `<script>` / `on*` handlers / `javascript:` URLs and **nothing bypasses it** (no `bypassSecurityTrust`
+  anywhere). The `<b>${pkid}</b>` renders bold precisely because Angular allows *safe* markup. Residual
+  is content-injection (a phishing link, an external image load), not script execution. A prior review
+  rated this a MEDIUM stored XSS with token theft — that is a false positive. **Verify
+  `bypassSecurityTrust` absence before ever rating an Angular `[innerHTML]` as script-XSS.**
+- **Clean, verified:** SQL fully parameterized (static `ORDER BY`, `LIKE` wildcard bound as a value, no
+  dynamic column names); no over-posting (repos enumerate columns; privilege DTOs are Admin-gated); no
+  secrets in code, schema, or tracked config (Windows-auth connection string, signing key read at runtime
+  from `SysConfig`); deps current with a tracked lockfile and no install scripts.
+- **Deferred hardening (see TODOS.md › Security):** login has no rate-limit/lockout over fast unsalted
+  SHA-256 (the one worth doing first); Swagger UI is served unconditionally in every environment
+  (`Program.cs:114`, endpoints still auth-gated); non-constant-time hash compare; `Encrypt=False` to SQL
+  Server; bearer attached to all HttpClient calls (no live off-origin leak); client `isAuthenticated` is
+  presence-only. None is an open exploitable door; all are accepted-risk or environment-gated.
 
 ## AppRole (角色) — no spec file
 
@@ -25,8 +230,15 @@ Angular model:
 - **Create:** SHA-256 (uppercase hex) of `SysConfig['appConfig'].defaultPassword`, with
   `PasswordUpdatedTime = GETUTCDATE()`.
 - **Update:** never touches it.
-- **Reset:** `POST /api/appusers/{id}/reset-password` re-applies the default (重設密碼 button on the
-  detail page).
+- **Reset:** `POST /api/appusers/{id}/reset-password` re-applies the default, returning 204 with no
+  body. Reachable from the detail page *and* the edit form (重設密碼為預設值), both Admin-gated.
+  **This endpoint is `[Authorize(Roles = AppRoles.Admin)]` — the only one needing more than the
+  global filter's "any authenticated user".** Resetting someone else's password is an account-takeover
+  primitive, so the role is enforced server-side; a non-Admin gets **403** whatever the UI shows. The
+  buttons are hidden for non-Admins purely so nobody clicks into a 403 — that is not the control.
+- Self-service password change is a separate path with no Admin involvement: see **Change Password**
+  under Auth. `ResetPasswordAsync` reads SysConfig and stamps `GETUTCDATE()` internally, so unlike
+  `ChangePasswordAsync` its hash/timestamp are not assertable in the mocked-repo suite.
 
 ## PublishStatus (發布狀態) — [spec/admin/PublishStatus.md](../spec/admin/PublishStatus.md)
 
@@ -76,6 +288,64 @@ patterns.
   `DisplayOrder ASC, pkid ASC`.
 - **Nav links:** the detail page emits the **first live Foreign-Primary links** (→ /partners,
   /course-groups, /publish-statuses).
+- **Inline list editing (list only):** the **first entity whose list cells edit in place**, and the
+  reference for that pattern. Double-click opens a cell; the editor's blur saves it. PrimeNG's
+  `pEditableColumn` opens on *single* click with no double-click option, so `CourseList` holds the
+  edit state itself (`editing` signal + `(dblclick)`) rather than using `p-cellEditor`. Notes:
+  - **Read-only columns** are `CourseList.READONLY_FIELDS` — `pkid` plus the two JOIN-resolved FK
+    labels (`partnerName`, `courseGroupDescription`), which have no writable counterpart on the row.
+    `publishStatus_pkid` *is* editable via dropdown, and its label is mirrored from the lookup on
+    save.
+  - **Saves re-fetch first.** The row carries only the n-n *counts*, and PUT delete-then-reinserts
+    both link tables — so a request built from the row would wipe the course's certifications and
+    job categories. `persist()` chains `getById` → `update` and overrides just the edited field.
+  - **Validation mirrors `course-form`** (required, `min(0)`, max lengths) plus the cross-field rule
+    `ScheduleOn ≤ ScheduleOff`, checked against the row's other endpoint. A failed validation keeps
+    the cell open with an inline error; a failed *save* reverts the cell and toasts.
+  - Date editors commit on `onSelect`, and on blur only once their overlay has closed — a blur while
+    the panel is open would otherwise commit before the user picks.
+- **QR code (detail only):** the 基本資料 card carries a QR code for the public course page
+  `https://www.uuu.com.tw/Course/Show/{pkid}/{CourseId}` (`CourseId` percent-encoded), captioned with
+  `CourseId` and downloadable as `{CourseId}.png`. Rendered by **`angularx-qrcode`** — pinned to
+  **`^20`**, since v21 requires Angular 21; keep the majors aligned when upgrading Angular. It draws
+  to a `<canvas>`, and `downloadQrCode()` reads that canvas via `toDataURL('image/png')`. Its
+  transitive `qrcode` dep is CommonJS, hence `allowedCommonJsDependencies` in `angular.json`. This is
+  the only entity with a QR code — it is **not** part of the standard detail scaffold.
 
 Nav: 課程管理 Course › 課程 Course. Primary-Foreign links to CourseFAQ / CourseRelatedLink /
 HotCourse are deferred until those features exist.
+
+## FeaturedPromoItem (上稿作業) — [spec/custom/FeaturedPromoItem/FeaturedPromoItem.spec.md](../spec/custom/FeaturedPromoItem/FeaturedPromoItem.spec.md)
+
+`int IDENTITY` PK. The **first customized CRUD**: the spec's mockups replace the standard
+`p-table` + filter-drawer list with a weekly schedule grid, so this feature deviates from the list
+conventions on purpose. Everything else (models, Dapper repo, routes, PUT-key-from-body) follows
+`code-gen.convention.md`.
+
+- **No list/detail/form triad.** `featured-promo-item-list` is the grid; `featured-promo-item-form`
+  is an **inline child component** (inputs/outputs, not a routed page) that opens in the cell being
+  edited. There is no detail page and no `/new` or `/:id/edit` route — the only route is
+  `/featured-promo-items`.
+- **Grid shape:** a TrainingCenter tab strip (`p-tabs`, fed by `GET /api/lookups/training-centers`)
+  over a Monday–Sunday week, each day holding slots 1–3. Cells are rendered from the 7×3 product,
+  not from the rows — an empty cell offers Edit / Paste, a filled one + / -- / Edit / Copy / Delete.
+- **One-week filter:** `FeaturedPromoItemQuery.WeekStart` accepts *any* date; the **controller**
+  snaps it to that week's Monday (`Week.MondayOf`) and the repo bounds `ScheduleOn` at
+  `WeekStart + 6`. Normalizing in the controller (not the repo) keeps it under mocked-repo test.
+  The client mirrors the same arithmetic in `mondayOf()` so the tab strip and header agree.
+- **PromoCode → Promotion_pkid:** the form takes a *code*, not a pkid. `GET /api/lookups/promo-codes`
+  feeds the autocomplete; `GET /api/lookups/promo-codes/{promoCode}` resolves one to
+  `PromoCodeLookup` (404 when unknown, which blocks the save). Picking a code seeds Topic and
+  Description but never overwrites text already typed — `FeaturedPromoItem.Topic`/`Description` are
+  its **own columns**, independent of the promo's after creation.
+- **Slot move (+ / --):** `POST /api/featured-promo-items/move` with `{pkid, delta}` (±1).
+  `IX_FeaturedPromoItem_UniqueDateLocSlot` forbids two rows sharing a slot even mid-statement, so a
+  swap parks the occupant on reserved slot `0` inside the transaction before landing it.
+- **Copy / Paste** is client-only: Copy lifts `{promoCode, topic, description}` into a signal +
+  `featured-promo-item-clipboard` session key; Paste opens a New form seeded with them.
+- **Dates:** `ScheduleOn` is `date` → `DateOnly`, converted with **local** components
+  (`toIso`/`parseDate` inline), never `toISOString()`.
+
+Nav: 首頁管理 Home › 上稿作業 FeaturedPromoItem — adding this turned Home into an expandable nav
+group. Promotion2 and TrainingCenter are FK targets that are **not built**, so the grid resolves
+their labels via lookups and emits no Foreign-Primary links.

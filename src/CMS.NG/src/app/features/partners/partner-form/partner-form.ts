@@ -10,6 +10,7 @@ import { MessageService } from 'primeng/api';
 
 import { PartnerService } from '../../../core/services/partner.service';
 import { PartnerRequest } from '../../../core/models/partner.model';
+import { RowAuditBadge } from '../../../core/components/row-audit-badge/row-audit-badge';
 
 @Component({
   selector: 'app-partner-form',
@@ -21,6 +22,7 @@ import { PartnerRequest } from '../../../core/models/partner.model';
     InputTextModule,
     InputNumberModule,
     ToastModule,
+    RowAuditBadge,
   ],
   providers: [MessageService],
   templateUrl: './partner-form.html',
@@ -40,6 +42,9 @@ export class PartnerForm implements OnInit {
   // pkid is IDENTITY (DB-assigned) — not a form control. Held separately for the UPDATE key.
   private editPkid = 0;
 
+  /** The audit badge's record — null while adding, since an unsaved row has no history. */
+  readonly auditPkid = signal<number | null>(null);
+
   readonly form = this.fb.nonNullable.group({
     name: ['', [Validators.required, Validators.maxLength(50)]],
     appKey: ['', [Validators.required, Validators.maxLength(10)]],
@@ -56,6 +61,7 @@ export class PartnerForm implements OnInit {
     if (id) {
       const pkid = Number(id);
       this.editPkid = pkid;
+      this.auditPkid.set(pkid);
       this.service.getById(pkid).subscribe({
         next: (partner) => {
           this.form.patchValue({

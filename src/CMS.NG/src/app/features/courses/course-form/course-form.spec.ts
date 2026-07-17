@@ -1,4 +1,6 @@
 import { ComponentFixture, TestBed } from '@angular/core/testing';
+import { provideHttpClient } from '@angular/common/http';
+import { provideHttpClientTesting } from '@angular/common/http/testing';
 import { ActivatedRoute, Router } from '@angular/router';
 import { provideNoopAnimations } from '@angular/platform-browser/animations';
 import { of } from 'rxjs';
@@ -85,6 +87,8 @@ describe('CourseForm', () => {
       imports: [CourseForm],
       providers: [
         provideNoopAnimations(),
+        provideHttpClient(),
+        provideHttpClientTesting(),
         { provide: CourseService, useValue: serviceSpy },
         { provide: Router, useValue: routerSpy },
         {
@@ -133,6 +137,32 @@ describe('CourseForm', () => {
       expect(arg.title).toBe('AWS 進階課程');
       expect(arg.scheduleOn).toBe('2026-01-01');
       expect(routerSpy.navigate).toHaveBeenCalledWith(['/courses', 7]);
+    });
+  });
+
+  describe('sticky action toolbar', () => {
+    function expectStickyToolbar(fixture: ComponentFixture<CourseForm>): void {
+      const toolbar = fixture.nativeElement.querySelector('.page-header') as HTMLElement;
+      expect(toolbar).withContext('action toolbar renders').toBeTruthy();
+
+      const style = getComputedStyle(toolbar);
+      expect(style.position).toBe('sticky');
+      expect(style.top).toBe('0px');
+      expect(Number(style.zIndex)).toBeGreaterThan(0);
+
+      const labels = Array.from(
+        toolbar.querySelectorAll('.page-actions button')
+      ).map((b) => (b.textContent ?? '').trim());
+      expect(labels).toContain('儲存');
+      expect(labels).toContain('取消');
+    }
+
+    it('should pin the toolbar with Save/Cancel on the new form', () => {
+      expectStickyToolbar(setup(null));
+    });
+
+    it('should pin the toolbar with Save/Cancel on the edit form', () => {
+      expectStickyToolbar(setup('1'));
     });
   });
 

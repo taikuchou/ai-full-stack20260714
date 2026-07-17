@@ -1,5 +1,7 @@
 using CMS.API.Models;
 using CMS.API.Repositories;
+using CMS.API.Security;
+using Microsoft.AspNetCore.Authorization;
 using Microsoft.AspNetCore.Mvc;
 
 namespace CMS.API.Controllers;
@@ -31,6 +33,10 @@ public class AppUsersController : ControllerBase
     }
 
     /// <summary>Create a user. The initial password is set server-side from the configured default.</summary>
+    // Admin-only: Create/Update write RoleIds (n-n via AppUserRole), so an ungated caller could grant
+    // themselves Admin. Role assignment is a stronger privilege primitive than reset-password, which is
+    // already Admin-gated below. Reads (GetAll/Query/GetById) stay open to any authenticated user.
+    [Authorize(Roles = AppRoles.Admin)]
     [HttpPost]
     public async Task<ActionResult<AppUser>> Create([FromBody] AppUserRequest request, CancellationToken ct)
     {
@@ -48,6 +54,7 @@ public class AppUsersController : ControllerBase
     }
 
     /// <summary>Update a user. UserId (key) is taken from the body. The password is never modified here.</summary>
+    [Authorize(Roles = AppRoles.Admin)]
     [HttpPut]
     public async Task<ActionResult<AppUser>> Update([FromBody] AppUserRequest request, CancellationToken ct)
     {
@@ -63,6 +70,7 @@ public class AppUsersController : ControllerBase
     }
 
     /// <summary>Delete a user by UserId.</summary>
+    [Authorize(Roles = AppRoles.Admin)]
     [HttpDelete("{id}")]
     public async Task<IActionResult> Delete(string id, CancellationToken ct)
     {
@@ -70,7 +78,11 @@ public class AppUsersController : ControllerBase
         return deleted ? NoContent() : NotFound();
     }
 
-    /// <summary>Reset the user's password to the configured default.</summary>
+    /// <summary>Reset the user's password to the configured default. Admin only.</summary>
+    // Resetting another account's password is a takeover primitive, so the role is enforced here
+    // rather than only hidden in the UI. Roles come from the caller's JWT role claims; this is the
+    // one endpoint that needs more than the global AuthorizeFilter's "any authenticated user".
+    [Authorize(Roles = AppRoles.Admin)]
     [HttpPost("{id}/reset-password")]
     public async Task<IActionResult> ResetPassword(string id, CancellationToken ct)
     {

@@ -1,0 +1,62 @@
+<button
+  type="button"
+  class="audit-badge"
+  [class.audit-badge--empty]="!latest() && !loading()"
+  (click)="open()"
+  data-testid="audit-badge">
+  <i class="pi pi-history" aria-hidden="true"></i>
+  <span class="audit-badge__label">異動紀錄 History</span>
+
+  @if (loading()) {
+    <span class="audit-badge__latest">· 載入中…</span>
+  } @else if (latestLabel(); as label) {
+    <span class="audit-badge__latest" data-testid="audit-badge-latest">· {{ label }}</span>
+  } @else {
+    <span class="audit-badge__latest" data-testid="audit-badge-empty">· 尚無異動紀錄 No history</span>
+  }
+</button>
+
+<p-dialog
+  header="異動紀錄 History"
+  [visible]="dialogVisibleModel"
+  (visibleChange)="dialogVisibleModel = $event"
+  [modal]="true"
+  [draggable]="false"
+  [resizable]="false"
+  [dismissableMask]="true"
+  [style]="{ width: '48rem' }"
+  appendTo="body"
+  styleClass="audit-dialog">
+  @if (loading()) {
+    <div class="audit-dialog__state">載入中…</div>
+  } @else if (history().length === 0) {
+    <div class="audit-dialog__state" data-testid="audit-dialog-empty">
+      尚無異動紀錄 No history yet — 這筆資料建立後尚未有異動記錄。
+    </div>
+  } @else {
+    <table class="audit-table" data-testid="audit-dialog-table">
+      <thead>
+        <tr>
+          <th scope="col">時間 Time</th>
+          <th scope="col">使用者 User</th>
+          <th scope="col">動作 Action</th>
+          <th scope="col">說明 Description</th>
+        </tr>
+      </thead>
+      <tbody>
+        @for (item of history(); track $index) {
+          <tr data-testid="audit-dialog-row">
+            <td class="audit-table__time">{{ format(item.dateTime) }}</td>
+            <td>{{ item.userName }}</td>
+            <td>
+              <span class="audit-action" [class]="'audit-action--' + item.actionType.toLowerCase()">
+                {{ item.actionType }}
+              </span>
+            </td>
+            <td class="audit-table__desc">{{ item.actionDesc || '—' }}</td>
+          </tr>
+        }
+      </tbody>
+    </table>
+  }
+</p-dialog>

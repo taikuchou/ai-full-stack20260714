@@ -37,7 +37,7 @@
 }
 
 .key-col {
-  background: #f0fdf4;
+  /* Emphasis by weight only — the old green column tint read as a state and swamped wide columns. */
   font-weight: 600;
 }
 
@@ -51,6 +51,37 @@
 
 .actions {
   white-space: nowrap;
+}
+
+/* Inline editing — dblclick opens .cell-editor in place of the display value. */
+.editable-cell {
+  cursor: cell;
+}
+
+.readonly-cell {
+  color: #64748b;
+}
+
+.cell-editor {
+  display: flex;
+  flex-direction: column;
+  gap: 0.25rem;
+  text-align: left;
+
+  input,
+  ::ng-deep .p-select,
+  ::ng-deep .p-datepicker,
+  ::ng-deep .p-inputnumber,
+  ::ng-deep .p-inputnumber input {
+    width: 100%;
+  }
+
+  .cell-error {
+    color: #dc2626;
+    font-size: 0.75rem;
+    line-height: 1.2;
+    white-space: normal;
+  }
 }
 
 .empty {
@@ -79,9 +110,11 @@
     input,
     ::ng-deep .p-select,
     ::ng-deep .p-datepicker,
+    ::ng-deep .p-datepicker input,
     ::ng-deep .p-inputnumber,
     ::ng-deep .p-inputnumber input {
       width: 100%;
+      min-width: 0;
     }
 
     .range {
@@ -89,7 +122,14 @@
       align-items: center;
       gap: 0.5rem;
 
+      /* Two 100%-width pickers + tilde must shrink to share the row, not overflow the drawer. */
+      > * {
+        flex: 1 1 0;
+        min-width: 0;
+      }
+
       .tilde {
+        flex: 0 0 auto;
         color: #94a3b8;
       }
     }

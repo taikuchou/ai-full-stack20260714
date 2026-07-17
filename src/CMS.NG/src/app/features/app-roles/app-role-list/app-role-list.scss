@@ -37,7 +37,7 @@
 }
 
 .key-col {
-  background: #f0fdf4;
+  /* Emphasis by weight only — the old green column tint read as a state and swamped wide columns. */
   font-weight: 600;
 }
 
@@ -83,7 +83,14 @@
       align-items: center;
       gap: 0.5rem;
 
+      /* Two 100%-width inputs + tilde must shrink to share the row, not overflow the drawer. */
+      > * {
+        flex: 1 1 0;
+        min-width: 0;
+      }
+
       .tilde {
+        flex: 0 0 auto;
         color: #94a3b8;
       }
     }

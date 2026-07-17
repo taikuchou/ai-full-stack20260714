@@ -16,6 +16,7 @@ import { MessageService } from 'primeng/api';
 
 import { CourseService } from '../../../core/services/course.service';
 import { CourseRequest, LookupItem } from '../../../core/models/course.model';
+import { RowAuditBadge } from '../../../core/components/row-audit-badge/row-audit-badge';
 
 interface Option {
   value: number;
@@ -53,6 +54,7 @@ function parseDate(s: string | null): Date | null {
     DatePickerModule,
     ToggleSwitchModule,
     ToastModule,
+    RowAuditBadge,
   ],
   providers: [MessageService],
   templateUrl: './course-form.html',
@@ -77,6 +79,9 @@ export class CourseForm implements OnInit {
 
   // pkid is IDENTITY (DB-assigned) — not a form control. Held separately for the UPDATE key.
   private editPkid = 0;
+
+  /** The audit badge's record — null while adding, since an unsaved row has no history. */
+  readonly auditPkid = signal<number | null>(null);
 
   readonly form = this.fb.nonNullable.group({
     title: ['', [Validators.required, Validators.maxLength(200)]],
@@ -127,6 +132,7 @@ export class CourseForm implements OnInit {
 
         if (course) {
           this.editPkid = course.pkid;
+          this.auditPkid.set(course.pkid);
           this.form.patchValue({
             title: course.title,
             officialTitle: course.officialTitle,

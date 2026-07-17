@@ -1,4 +1,5 @@
 using System.Data;
+using CMS.API.Auditing;
 using CMS.API.Data;
 using CMS.API.Models;
 using Dapper;
@@ -7,9 +8,16 @@ namespace CMS.API.Repositories;
 
 public class CourseRepository : ICourseRepository
 {
-    private readonly IDbConnectionFactory _factory;
+    private const string TableName = "Course";
 
-    public CourseRepository(IDbConnectionFactory factory) => _factory = factory;
+    private readonly IDbConnectionFactory _factory;
+    private readonly IRowAuditWriter _audit;
+
+    public CourseRepository(IDbConnectionFactory factory, IRowAuditWriter audit)
+    {
+        _factory = factory;
+        _audit = audit;
+    }
 
     // Shared SELECT for list/view. FK labels via LEFT JOIN; n-n counts via correlated subqueries.
     // CourseGroup is a nullable FK, so LEFT JOIN keeps courses with no group.
@@ -95,13 +103,23 @@ ORDER BY c.DisplayOrder ASC, c.pkid ASC";
 
     public async Task<Course?> GetByIdAsync(int pkid, CancellationToken ct = default)
     {
+        using var conn = await _factory.CreateOpenConnectionAsync(ct);
+        return await LoadAsync(conn, null, pkid, ct);
+    }
+
+    /// <summary>
+    /// Reads a course and its n-n id lists. Takes the caller's transaction so audit "before"
+    /// snapshots see the same uncommitted state as the change itself.
+    /// </summary>
+    private static async Task<Course?> LoadAsync(
+        IDbConnection conn, IDbTransaction? tx, int pkid, CancellationToken ct)
+    {
         var sql = $@"{SelectList} WHERE c.pkid = @Pkid;
 SELECT Certification_pkid FROM CourseInCertification WHERE Course_pkid = @Pkid ORDER BY Certification_pkid;
 SELECT JobCategory_pkid   FROM CourseJobCategories  WHERE Course_pkid = @Pkid ORDER BY JobCategory_pkid;";
 
-        using var conn = await _factory.CreateOpenConnectionAsync(ct);
         using var multi = await conn.QueryMultipleAsync(
-            new CommandDefinition(sql, new { Pkid = pkid }, cancellationToken: ct));
+            new CommandDefinition(sql, new { Pkid = pkid }, tx, cancellationToken: ct));
 
         var course = await multi.ReadFirstOrDefaultAsync<Course>();
         if (course is null) return null;
@@ -110,6 +128,12 @@ SELECT JobCategory_pkid   FROM CourseJobCategories  WHERE Course_pkid = @Pkid OR
         course.JobCategoryPkids = (await multi.ReadAsync<short>()).ToList();
         return course;
     }
+
+    /// <summary>Loads a row that must exist because the caller just wrote it inside this transaction.</summary>
+    private static async Task<Course> RequireAsync(
+        IDbConnection conn, IDbTransaction tx, int pkid, CancellationToken ct)
+        => await LoadAsync(conn, tx, pkid, ct)
+           ?? throw new InvalidOperationException($"{TableName} {pkid} is missing immediately after being written.");
 
     public async Task<int> CreateAsync(CourseRequest request, CancellationToken ct = default)
     {
@@ -134,6 +158,8 @@ SELECT CAST(SCOPE_IDENTITY() AS int);",
         await SyncCertificationsAsync(conn, tx, newId, request.CertificationPkids, ct);
         await SyncJobCategoriesAsync(conn, tx, newId, request.JobCategoryPkids, ct);
 
+        await _audit.LogInsertAsync(conn, tx, TableName, await RequireAsync(conn, tx, newId, ct), ct);
+
         tx.Commit();
         return newId;
     }
@@ -142,6 +168,14 @@ SELECT CAST(SCOPE_IDENTITY() AS int);",
     {
         using var conn = await _factory.CreateOpenConnectionAsync(ct);
         using var tx = conn.BeginTransaction();
+
+        // Read the "before" inside the transaction so the audited change list is accurate.
+        var before = await LoadAsync(conn, tx, request.Pkid, ct);
+        if (before is null)
+        {
+            tx.Rollback();
+            return false;
+        }
 
         var affected = await conn.ExecuteAsync(new CommandDefinition(@"
 UPDATE Course
@@ -180,6 +214,9 @@ WHERE pkid = @Pkid;",
         await SyncCertificationsAsync(conn, tx, request.Pkid, request.CertificationPkids, ct);
         await SyncJobCategoriesAsync(conn, tx, request.Pkid, request.JobCategoryPkids, ct);
 
+        await _audit.LogUpdateAsync(
+            conn, tx, TableName, before, await RequireAsync(conn, tx, request.Pkid, ct), ct);
+
         tx.Commit();
         return true;
     }
@@ -189,6 +226,14 @@ WHERE pkid = @Pkid;",
         using var conn = await _factory.CreateOpenConnectionAsync(ct);
         using var tx = conn.BeginTransaction();
 
+        // Read the row before deleting it — afterwards its first string column is gone.
+        var row = await LoadAsync(conn, tx, pkid, ct);
+        if (row is null)
+        {
+            tx.Rollback();
+            return false;
+        }
+
         // Remove n-n rows first (also covered by ON DELETE CASCADE, but explicit for clarity).
         await conn.ExecuteAsync(new CommandDefinition(
             "DELETE FROM CourseInCertification WHERE Course_pkid = @Pkid",
@@ -197,12 +242,14 @@ WHERE pkid = @Pkid;",
             "DELETE FROM CourseJobCategories WHERE Course_pkid = @Pkid",
             new { Pkid = pkid }, tx, cancellationToken: ct));
 
-        var affected = await conn.ExecuteAsync(new CommandDefinition(
+        await conn.ExecuteAsync(new CommandDefinition(
             "DELETE FROM Course WHERE pkid = @Pkid",
             new { Pkid = pkid }, tx, cancellationToken: ct));
 
+        await _audit.LogDeleteAsync(conn, tx, TableName, row, ct);
+
         tx.Commit();
-        return affected > 0;
+        return true;
     }
 
     // Delete-then-reinsert the CourseInCertification links for a course.

@@ -1,4 +1,5 @@
 using System.Data;
+using CMS.API.Auditing;
 using CMS.API.Data;
 using CMS.API.Models;
 using Dapper;
@@ -7,9 +8,16 @@ namespace CMS.API.Repositories;
 
 public class AppRoleRepository : IAppRoleRepository
 {
-    private readonly IDbConnectionFactory _factory;
+    private const string TableName = "AppRole";
 
-    public AppRoleRepository(IDbConnectionFactory factory) => _factory = factory;
+    private readonly IDbConnectionFactory _factory;
+    private readonly IRowAuditWriter _audit;
+
+    public AppRoleRepository(IDbConnectionFactory factory, IRowAuditWriter audit)
+    {
+        _factory = factory;
+        _audit = audit;
+    }
 
     // Shared SELECT for list/view. UserCount is a correlated subquery over the AppUserRole n-n table.
     private const string SelectList = @"
@@ -54,12 +62,22 @@ ORDER BY r.RoleId ASC";
 
     public async Task<AppRole?> GetByIdAsync(string roleId, CancellationToken ct = default)
     {
+        using var conn = await _factory.CreateOpenConnectionAsync(ct);
+        return await LoadAsync(conn, null, roleId, ct);
+    }
+
+    /// <summary>
+    /// Reads a role and its user links. Takes the caller's transaction so audit "before" snapshots
+    /// see the same uncommitted state as the change itself.
+    /// </summary>
+    private static async Task<AppRole?> LoadAsync(
+        IDbConnection conn, IDbTransaction? tx, string roleId, CancellationToken ct)
+    {
         var sql = $@"{SelectList} WHERE r.RoleId = @RoleId;
 SELECT ur.UserId FROM AppUserRole ur WHERE ur.RoleId = @RoleId ORDER BY ur.UserId;";
 
-        using var conn = await _factory.CreateOpenConnectionAsync(ct);
         using var multi = await conn.QueryMultipleAsync(
-            new CommandDefinition(sql, new { RoleId = roleId }, cancellationToken: ct));
+            new CommandDefinition(sql, new { RoleId = roleId }, tx, cancellationToken: ct));
 
         var role = await multi.ReadFirstOrDefaultAsync<AppRole>();
         if (role is null) return null;
@@ -67,6 +85,12 @@ SELECT ur.UserId FROM AppUserRole ur WHERE ur.RoleId = @RoleId ORDER BY ur.UserI
         role.UserIds = (await multi.ReadAsync<string>()).ToList();
         return role;
     }
+
+    /// <summary>Loads a row that must exist because the caller just wrote it inside this transaction.</summary>
+    private static async Task<AppRole> RequireAsync(
+        IDbConnection conn, IDbTransaction tx, string roleId, CancellationToken ct)
+        => await LoadAsync(conn, tx, roleId, ct)
+           ?? throw new InvalidOperationException($"{TableName} {roleId} is missing immediately after being written.");
 
     public async Task<bool> ExistsAsync(string roleId, CancellationToken ct = default)
     {
@@ -90,6 +114,8 @@ VALUES (@RoleId, @RoleName, @PermissionLevel, @Description);",
 
         await SyncUsersAsync(conn, tx, request.RoleId, request.UserIds, ct);
 
+        await _audit.LogInsertAsync(conn, tx, TableName, await RequireAsync(conn, tx, request.RoleId, ct), ct);
+
         tx.Commit();
         return request.RoleId;
     }
@@ -98,6 +124,14 @@ VALUES (@RoleId, @RoleName, @PermissionLevel, @Description);",
     {
         using var conn = await _factory.CreateOpenConnectionAsync(ct);
         using var tx = conn.BeginTransaction();
+
+        // Read the "before" inside the transaction so the audited change list is accurate.
+        var before = await LoadAsync(conn, tx, request.RoleId, ct);
+        if (before is null)
+        {
+            tx.Rollback();
+            return false;
+        }
 
         var affected = await conn.ExecuteAsync(new CommandDefinition(@"
 UPDATE AppRole
@@ -116,6 +150,9 @@ WHERE RoleId = @RoleId;",
 
         await SyncUsersAsync(conn, tx, request.RoleId, request.UserIds, ct);
 
+        await _audit.LogUpdateAsync(
+            conn, tx, TableName, before, await RequireAsync(conn, tx, request.RoleId, ct), ct);
+
         tx.Commit();
         return true;
     }
@@ -125,17 +162,27 @@ WHERE RoleId = @RoleId;",
         using var conn = await _factory.CreateOpenConnectionAsync(ct);
         using var tx = conn.BeginTransaction();
 
+        // Read the row before deleting it — afterwards its first string column is gone.
+        var row = await LoadAsync(conn, tx, roleId, ct);
+        if (row is null)
+        {
+            tx.Rollback();
+            return false;
+        }
+
         // Remove n-n rows first to satisfy the FK_AppUserRole_AppRole constraint.
         await conn.ExecuteAsync(new CommandDefinition(
             "DELETE FROM AppUserRole WHERE RoleId = @RoleId",
             new { RoleId = roleId }, tx, cancellationToken: ct));
 
-        var affected = await conn.ExecuteAsync(new CommandDefinition(
+        await conn.ExecuteAsync(new CommandDefinition(
             "DELETE FROM AppRole WHERE RoleId = @RoleId",
             new { RoleId = roleId }, tx, cancellationToken: ct));
 
+        await _audit.LogDeleteAsync(conn, tx, TableName, row, ct);
+
         tx.Commit();
-        return affected > 0;
+        return true;
     }
 
     // Delete-then-reinsert the AppUserRole assignments for a role.

@@ -1,6 +1,9 @@
 <div class="page-header">
   <div class="page-title">
     <h1>檢視課程群組</h1>
+    @if (courseGroup(); as g) {
+      <app-row-audit-badge tableName="CourseGroup" [pkid]="g.pkid" />
+    }
   </div>
   <div class="page-actions">
     <p-button label="返回" icon="pi pi-arrow-left" severity="secondary" [outlined]="true" (onClick)="back()" />

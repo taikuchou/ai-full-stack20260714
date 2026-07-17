@@ -1,63 +1,48 @@
 # CLAUDE.md
 
-## What this is
-
 CMS generated from a SQL Server schema. **`database/*.sql` is the source of truth** — models, DTOs
-and nullability derive from it.
+and nullability derive from it. This file is an index, not a substitute; each linked doc owns its area.
 
 ## Layout
 
 - `database/` schema (source of truth); `spec/` conventions, build specs, mockups
 - `src/CMS.API/` .NET 9 Web API, Dapper (no EF), /swagger
-- `src/CMS.API.Tests/` xUnit + Moq (controllers vs mocked repo)
+- `src/CMS.API.Tests/` xUnit + Moq (controllers vs mocked repo, no DB); repo behaviour needs a real
+  DbConnection → those are `[DatabaseFact]`, skip without it
 - `src/CMS.NG/` Angular 20 + PrimeNG
 
 ## Read when you need it
 
 | Doc | Read it when |
 |---|---|
-| [docs/setup-notes.md](docs/setup-notes.md) | Building, testing, or running anything — env quirks bite here |
-| [spec/code-gen.convention.md](spec/code-gen.convention.md) | Scaffolding a feature — **read first**; PK/FK/N-N patterns |
-| [docs/features.md](docs/features.md) | Touching or extending an existing feature |
-| `spec/{area}/{Entity}.md` | Working on that entity — the fullest source (see index below) |
-| `spec/sample1.spec.md`, `sample2.spec.md` | Writing a new build spec (samples) |
-| `spec/feature-spec.template.md` | Writing a new build spec (template) |
+| [docs/setup-notes.md](docs/setup-notes.md) | Building, testing, running — env quirks bite here |
+| [spec/code-gen.convention.md](spec/code-gen.convention.md) | Scaffolding / touching API/UI structure — **read first**; PK/FK/N-N, routes, auth, wiring |
+| [docs/features.md](docs/features.md) | Touching a feature — index of every one, plus auth / RowAudit / error handling / Security posture |
+| [TODOS.md](TODOS.md) › Security | Security / auth / hardening — the `/cso` deferred backlog |
+| [docs/reading-specs.md](docs/reading-specs.md) | Before trusting anything under `spec/` — which specs are real |
+| [docs/agent-notes.md](docs/agent-notes.md) | Skill routing and other agent conventions |
+| `spec/{area}/{Entity}.md` | Working an entity — the fullest source (linked from features.md) |
+| [spec/feature-spec.template.md](spec/feature-spec.template.md) | Writing a new build spec |
 
-`spec/ui-sample-*.png` are style references only.
+## Assume by default
 
-## Conventions in brief
+The few things you'd get wrong *before* knowing to open a doc. The cross-cutting three already exist
+and are wired everywhere — a new feature reuses them, it doesn't re-implement them.
 
-Full detail in `spec/code-gen.convention.md`.
+- **Auth is on.** Every endpoint/route is protected; a new feature adds no auth wiring. Opt out with an
+  explicit `[AllowAnonymous]`. Local run needs a real AppUser login or the `Auth:Disabled` hatch → setup-notes.
+- **Row audit is on.** Inject `IRowAuditWriter` (`CMS.API/Auditing/`), call it on the operation's **own
+  transaction**, and put `<app-row-audit-badge>` after `<h1>` in `.page-title` → features.md › RowAudit.
+- **Error safety net is global.** No per-controller try/catch for *unexpected* errors
+  (`GlobalExceptionHandler`); no per-page server-error handling (`errorInterceptor`). Deliberate
+  400/401/403/404 stay put → features.md › Error handling.
+- **Copy the reference feature**, not the nearest one — code-gen.convention.md names one per PK/FK pattern.
+- **A spec is intent; only code proves what exists.** "Not in `src/`" ≠ "not built" → reading-specs.md.
+- **Angular is XSS-safe by default.** `[innerHTML]` (incl. PrimeNG ConfirmDialog `message`) is sanitized
+  unless something calls `bypassSecurityTrust*` — grep for that before rating any innerHTML as script-XSS
+  → features.md › Security posture.
 
-**Backend** — per entity: `{Entity}.cs`, `{Entity}Request.cs` (write), `{Entity}Query.cs` (search),
-`I{Entity}Repository` + `{Entity}Repository` (Dapper). Routes `GET /api/{plural}`,
-`POST /api/{plural}/query`, `GET/POST/PUT/DELETE`; **PUT takes its key from the body**. Lookups
-`GET /api/lookups/{plural}`. `nchar(n)` → `RTRIM()` in SELECTs. `DateOnly`/`TimeOnly` handlers live
-in `Program.cs`. `IDbConnectionFactory` reads `ConnectionStrings:CMS`; CORS from
-`Cors:AllowedOrigins`.
+## Skill routing
 
-**Frontend** — components under `features/{plural}/{entity}-list|-detail|-form/`; shared code in
-`core/models/`, `core/services/`. List = `p-table` + `p-drawer` filter with session-storage
-`{entity}-list-filters`/`-sort`/`-page`. Form = reactive, `forkJoin` lookups, `p-multiselect` for
-n-n. API URL from `environment.ts`/`.development.ts` (`fileReplacements`); import `@env/environment`.
-Theme `Aura` in `app.config.ts`; shell = Ultima; menu = `sections` signal; topbar brand text
-(`app.html` `.logo-text`) = `CMS`.
-
-## Implemented features
-
-Each row names the PK pattern it exemplifies — copy the closest match when scaffolding. Detail in
-[docs/features.md](docs/features.md).
-
-| Entity | 中文 | PK pattern | Nav | Spec |
-|---|---|---|---|---|
-| AppRole | 角色 | string (`RoleId`) | 系統管理 › 角色 | *(none — mirror the code)* |
-| AppUser | 使用者 | string (`UserId`) | 系統管理 › 使用者 | [auth/AppUser.md](spec/auth/AppUser.md) |
-| PublishStatus | 發布狀態 | `tinyint`, user-assigned | 系統管理 › 發布狀態 | [admin/PublishStatus.md](spec/admin/PublishStatus.md) |
-| Partner | 合作廠商 | `smallint IDENTITY` | 課程管理 › 合作廠商 | [course/Partner.md](spec/course/Partner.md) |
-| CourseGroup | 課程群組 | `smallint IDENTITY` | 課程管理 › 課程群組 | [course/CourseGroup.md](spec/course/CourseGroup.md) |
-| Course | 課程 | `int IDENTITY` | 課程管理 › 課程 | [course/Course.md](spec/course/Course.md) |
-
-All six are full CRUD. **Course** is the only FK-bearing entity and the only one with N-N beyond the
-AppRole↔AppUser junction — copy it for anything with foreign keys.
-
-Nav links from a built entity to an unbuilt one are **deferred until the target feature exists**.
+Match the request to an available skill and invoke it via the Skill tool — when in doubt, invoke.
+Non-obvious mappings: [docs/agent-notes.md](docs/agent-notes.md).

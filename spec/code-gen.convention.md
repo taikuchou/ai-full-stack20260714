@@ -35,6 +35,9 @@
   - IDENTITY-assigned PKs: `{TABLE}Request.Pkid` carries the UPDATE key.
   - On a string-PK table, any additional IDENTITY `pkid` column is **display-only**.
   - Multi-word entities take a **kebab-case plural** route (`/api/course-groups`).
+  - **Never copy `FeaturedPromoItem`.** It shares the `int IDENTITY` row above but is a *customized*
+    CRUD (weekly schedule grid, inline cell form, no routed form/detail) — copy `Course` for that PK
+    variant instead. See [../docs/features.md](../docs/features.md) for what it deviates on and why.
 
   ### Controller
   - Route: `/api/{tablePlural}`; `PUT` takes pkid from body (no route param)
@@ -90,3 +93,32 @@
   | PUT    | `/api/{plural}` | Update (pkid in body) |
   | DELETE | `/api/{plural}/{id}` | Delete |
   | GET    | `/api/lookups/{plural}` | Slim lookup list (if used as FK target) |
+
+  ## App wiring
+
+  Project-wide plumbing a new feature slots into — it already exists; do not re-invent it.
+
+  ### Backend
+  - `IDbConnectionFactory` reads `ConnectionStrings:CMS`; CORS origins come from `Cors:AllowedOrigins`.
+  - `DateOnly`/`TimeOnly` Dapper type handlers are registered in `Program.cs`.
+  - Authentication is on: a global `AuthorizeFilter` (`Program.cs`) already requires a valid Bearer
+    token on **every** endpoint, so a scaffolded controller needs **no** auth wiring and no
+    `[Authorize]`. Opting *out* is what takes an explicit `[AllowAnonymous]` — put it on the
+    **action**, never the controller, since it short-circuits authorization for every action it
+    covers and an action-level `[Authorize]` cannot win it back. `AuthController` is the reference.
+    See [../docs/features.md](../docs/features.md) (Auth).
+  - The signed-in user comes from the token: `User.FindFirstValue(ClaimTypes.NameIdentifier)`. Never
+    take the acting user's identity from a request body — see `AuthController.UpdateProfile`.
+  - Role-restricted endpoints take `[Authorize(Roles = AppRoles.Admin)]` on the **action**
+    (`AppUsersController.ResetPassword` is the reference). Enforce the role server-side; hiding the
+    button is convenience, not access control.
+
+  ### Frontend
+  - Shared code lives in `core/models/`, `core/services/`, `core/guards/`, `core/interceptors/` and
+    `core/utils/` (`jwt.util.ts`). Note the **date/time helpers stay inline in each form** — see
+    Form page above; `core/utils/` is not the place for them.
+  - API base URL comes from `environment.ts` / `environment.development.ts` (swapped by
+    `fileReplacements` in `angular.json`); import it as `@env/environment`.
+  - PrimeNG theme `Aura`, configured in `app.config.ts`. The shell is Ultima; the sidebar menu is
+    the `sections` signal in `app.ts` / `app.html`.
+  - Topbar brand text is `CMS` (`app.html`, `.logo-text`).

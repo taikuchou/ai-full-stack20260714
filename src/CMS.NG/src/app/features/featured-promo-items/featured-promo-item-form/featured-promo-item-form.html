@@ -1,0 +1,57 @@
+<form class="inline-form" [formGroup]="form" (ngSubmit)="save()">
+  <div class="field">
+    <label for="promoCode-{{ scheduleOn() }}-{{ slot() }}">PromoCode:</label>
+    <p-autocomplete
+      inputId="promoCode-{{ scheduleOn() }}-{{ slot() }}"
+      formControlName="promoCode"
+      [suggestions]="suggestions()"
+      (completeMethod)="search($event)"
+      (onSelect)="onPromoCodeSelect()"
+      (onBlur)="onPromoCodeSelect()"
+      [forceSelection]="false"
+      [showEmptyMessage]="true"
+      emptyMessage="查無活動代碼"
+      appendTo="body"
+      styleClass="promo-code-input" />
+  </div>
+
+  <div class="field">
+    <label for="topic-{{ scheduleOn() }}-{{ slot() }}">Topic:</label>
+    <input
+      id="topic-{{ scheduleOn() }}-{{ slot() }}"
+      pInputText
+      type="text"
+      formControlName="topic"
+      maxlength="100" />
+  </div>
+
+  <div class="field">
+    <label for="description-{{ scheduleOn() }}-{{ slot() }}">Description:</label>
+    <input
+      id="description-{{ scheduleOn() }}-{{ slot() }}"
+      pInputText
+      type="text"
+      formControlName="description"
+      maxlength="300" />
+  </div>
+
+  @if (promoCodeError()) {
+    <p class="form-error">{{ promoCodeError() }}</p>
+  }
+
+  <div class="form-actions">
+    <p-button
+      label="Save"
+      [link]="true"
+      type="submit"
+      [disabled]="saving()"
+      styleClass="action-link" />
+    <p-button
+      label="Cancel"
+      [link]="true"
+      type="button"
+      severity="secondary"
+      (onClick)="cancel()"
+      styleClass="action-link" />
+  </div>
+</form>
