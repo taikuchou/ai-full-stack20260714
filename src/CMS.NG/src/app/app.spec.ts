@@ -109,8 +109,12 @@ describe('App', () => {
   it('should toggle the sidebar collapsed state', async () => {
     const fixture = await setup(ADMIN_PROFILE);
     const app = fixture.componentInstance;
-    expect(app['collapsed']()).toBeFalse();
+    // The initial state depends on viewport width (starts closed below 992px),
+    // so assert the toggle flips it rather than a fixed baseline.
+    const initial = app['collapsed']();
     app.toggleCollapse();
-    expect(app['collapsed']()).toBeTrue();
+    expect(app['collapsed']()).toBe(!initial);
+    app.toggleCollapse();
+    expect(app['collapsed']()).toBe(initial);
   });
 });
