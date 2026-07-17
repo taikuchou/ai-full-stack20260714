@@ -117,6 +117,61 @@ Deferred work, with the context needed to pick it up later.
   rebuild of a button that already exists. Whatever fix this entry gets, it must record **where**
   a thing is built, not just whether.
 
+## Security
+
+Deferred from the `/cso` full-project audit, 2026-07-17. Full report:
+`.gstack/security-reports/2026-07-17-cso-full-project.json` (gitignored). No finding is an open,
+exploitable door — the two real vulns from the 2026-07-16 review (privilege escalation, CourseGroup
+cascade data-loss) are already fixed and tested. These are hardening / accepted-risk, ordered by
+what is actually worth doing.
+
+- **[security] Login has no rate-limit or lockout, over fast unsalted SHA-256 hashing.**
+  `src/CMS.API/Controllers/AuthController.cs:26` (anonymous `POST /api/auth/login`, no throttle),
+  `src/CMS.API/Security/PasswordHasher.cs:10` (`SHA256.HashData`, no salt, uppercase hex).
+  The one residual item with real teeth: unthrottled online guessing, and a DB leak falls to
+  rainbow tables instantly. It sits below the audit's exploitable-vuln gate ("missing rate limiting"
+  is an explicit CSO hard-exclusion, and the hash scheme is documented accepted-risk for legacy
+  compat), but it is the thing worth investing in first.
+  *Fix:* add ASP.NET rate limiting + N-failure account lockout on the login action; migrate hashing
+  to PBKDF2/bcrypt/Argon2 opportunistically on next password change, dual-reading legacy SHA-256
+  hashes during transition so stored credentials keep working.
+
+- **[security] Swagger UI is served unconditionally in every environment.**
+  `src/CMS.API/Program.cs:114-119` — `UseSwagger()`/`UseSwaggerUI()` with no `IsDevelopment()` guard.
+  Endpoints stay behind the global `AuthorizeFilter`, so this is attack-surface/schema disclosure,
+  not data exposure, and the code marks it intentional for an internal tool. LOW; only matters if the
+  app ever becomes internet-facing. *Fix:* gate behind `app.Environment.IsDevelopment()`, or require
+  auth on the `/swagger` route.
+
+- **[security] Non-constant-time password-hash comparison.**
+  `src/CMS.API/Controllers/AuthController.cs:35` (and the change-password compare) use ordinary
+  string `!=`. A network timing attack to recover a hex hash is impractical (jitter dwarfs the
+  signal), so this is cosmetic. *Fix:* `CryptographicOperations.FixedTimeEquals` on the hash bytes.
+
+- **[security] TLS to SQL Server is disabled in the connection string.**
+  `src/CMS.API/appsettings.json:10` — `TrustServerCertificate=True;Encrypt=False`. Fine for a local
+  `.\SQLEXPRESS` box; if the DB ever moves off-host, traffic (including password hashes on login) is
+  cleartext on the wire. *Fix when deployed:* `Encrypt=True` with a valid server cert.
+
+- **[security] Bearer token is attached to every outbound HttpClient request with no host allowlist.**
+  `src/CMS.NG/src/app/core/interceptors/auth.interceptor.ts:9-10`. Not exploitable today — every one
+  of the 10 services builds its URL from `environment.apiBaseUrl`, so nothing targets a third-party
+  host. Latent: the first off-origin call added later would leak the JWT. *Fix:* guard the header on a
+  same-origin / apiBaseUrl host check.
+
+- **[security] Client `isAuthenticated` is presence-only, no token-expiry check.**
+  `src/CMS.NG/src/app/core/services/auth.service.ts:26`. An expired-but-present JWT passes the client
+  route guard until the first API call 401s and the interceptor logs out. Client-UX gap only; the
+  server remains the real gate. *Fix:* have the guard inspect `exp` (the `jwt.util.ts` decoder already
+  parses the token).
+
+- **[security, note not a bug] Prior "stored XSS" in delete-confirm dialogs is a false positive for
+  script execution.** PrimeNG's `ConfirmDialog` binds `message` via `[innerHTML]`, but Angular's
+  default sanitizer strips `<script>`, `onerror`, and `javascript:` (no `bypassSecurityTrust` anywhere
+  in app or PrimeNG). Residual is content-spoofing / phishing-link / external-image-load only, not
+  token theft. Recorded so nobody re-files it as a high-severity XSS. Optional hardening: HTML-escape
+  the interpolated free-text, keep the numeric `<b>${pkid}</b>`.
+
 ## Cross-cutting
 
 - **`<p-toast />` sits at `app.html:3`, outside the `@if (isLoginPage())` split.**
